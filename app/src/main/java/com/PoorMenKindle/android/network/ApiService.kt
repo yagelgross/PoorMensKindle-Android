@@ -1,11 +1,14 @@
 package com.PoorMenKindle.android.network
 
+import androidx.annotation.Keep
 import retrofit2.Response
 import retrofit2.http.*
 import retrofit2.http.GET
 import retrofit2.http.Query
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+
+@Keep
 interface ApiService {
 
     // --- Auth ---
@@ -39,6 +42,8 @@ interface ApiService {
 
     @GET("/progress/{book_id}")
     suspend fun getProgress(@Path("book_id") bookId: Int): Response<ProgressData>
+
+
 
     @GET("/last-read")
     suspend fun getLastRead(): Response<LastReadInfo?>
@@ -87,6 +92,15 @@ interface ApiService {
 
     @GET("/books/{book_id}")
     suspend fun getBook(@Path("book_id") bookId: Int): Response<BookInfo>
+
+    @POST("highlights/{book_id}")
+    suspend fun addHighlight(@Path("book_id") bookId: Int, @Body request: HighlightRequest): Response<Map<String, String>>
+
+    @GET("highlights/{book_id}")
+    suspend fun getHighlights(@Path("book_id") bookId: Int): Response<List<HighlightItem>>
+
+    @DELETE("highlights/{highlight_id}")
+    suspend fun deleteHighlight(@Path("highlight_id") highlightId: Int): retrofit2.Response<Map<String, String>>
 
     @GET("/api/translate")
     suspend fun translateText(@Query("text") text: String): retrofit2.Response<Map<String, String>>

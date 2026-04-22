@@ -1,3 +1,52 @@
 <resources>
+    // Library screen strings
     <string name="app_name">Poor Men\'s Kindle</string>
+    <string name="library_tab">Library</string>
+    <string name="admin_panel">Admin Panel</string>
+    <string name="request_book">Request Book</string>
+    <string name="offline_epub">Offline EPUB</string>
+    <string name="log_out">Log Out</string>
+    <string name="switch_language">עברית / English</string>
+    // Admin screen strings
+    <string name="admin_users_tab">Users</string>
+    <string name="admin_books_tab">Books</string>
+    <string name="admin_requests_tab">Requests</string>
+    <string name="admin_loading">Loading...</string>
+    <string name="admin_error">Error: %1$s</string>
+    <string name="admin_add_user_title">Add New User</string>
+    <string name="admin_username_label">Username</string>
+    <string name="admin_password_label">Password</string>
+    <string name="admin_is_admin_check">Is Admin</string>
+    <string name="admin_add_button">Add</string>
+    <string name="admin_cancel_button">Cancel</string>
+    <string name="admin_failed_add_user">Failed to add user.</string>
+    <string name="admin_add_book_title">Add New Book</string>
+    <string name="admin_book_title_label">Title</string>
+    <string name="admin_book_author_label">Author</string>
+    <string name="admin_book_series_name">Series Name (Optional)</string>
+    <string name="admin_book_series_number">Series Number (e.g., 1 or 1.5)</string>
+    <string name="admin_uploading_msg">Uploading &amp; Extracting...</string>
+    <string name="admin_select_epub">📁 Select EPUB File</string>
+    <string name="admin_epub_selected">✔ EPUB Selected</string>
+    <string name="admin_book_added">Book added!</string>
+    <string name="admin_upload_failed">Upload failed: %1$d</string>
+    <string name="admin_upload_button">Upload</string>
+    <string name="admin_dashboard_title">⚙ Admin Dashboard</string>
+    <string name="admin_add_user_desc">Add User</string>
+    <string name="admin_add_book_desc">Add Book</string>
+    <string name="admin_search_placeholder">Search currently loaded data...</string>
+    <string name="admin_user_id">ID: %1$d | %2$s</string>
+    <string name="admin_label_admin">ADMIN</string>
+    <string name="admin_joined">Joined: %1$s</string>
+    <string name="admin_last_login">Last Login: %1$s</string>
+    <string name="admin_never_login">Never</string>
+    <string name="admin_demote_button">Demote</string>
+    <string name="admin_promote_button">Promote</string>
+    <string name="admin_delete_button">Delete</string>
+    <string name="admin_chapters_count">ID: %1$d | %2$d Chapters</string>
+    <string name="admin_req_by">By: %1$s</string>
+    <string name="admin_req_requested_by">Requested by: %1$s</string>
+    <string name="admin_req_status">Status: %1$s</string>
+    <string name="admin_approve_button">✔ Approve</string>
+    <string name="admin_reject_button">✖ Reject</string>
 </resources>

@@ -3,7 +3,6 @@ package com.PoorMenKindle.android.ui.screens
 import android.content.Context
 import android.view.ActionMode
 import android.webkit.WebView
-
 open class SmartWebView(context: Context) : WebView(context) {
     var actionModeCallback: ActionMode.Callback? = null
 

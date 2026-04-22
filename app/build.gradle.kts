@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt")
 }
 
 android {
@@ -20,7 +21,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -61,6 +63,11 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.5.0")
 
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    kapt("androidx.room:room-compiler:$room_version")
+
 
     // Jetpack Compose Navigation (Replaces your SceneManager)
     implementation("androidx.navigation:navigation-compose:2.7.5")
@@ -74,6 +81,7 @@ dependencies {
     implementation("com.positiondev.epublib:epublib-core:3.1") {
         exclude(group = "org.slf4j")
         exclude(group = "xmlpull")
+        exclude(group = "net.sf.kxml", module = "kxml2")
     }
 
     // Satisfies epublib's internal logging requirement without crashing Android

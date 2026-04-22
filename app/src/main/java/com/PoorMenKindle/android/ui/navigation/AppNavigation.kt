@@ -21,9 +21,10 @@ import android.util.Base64
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Request : Screen("request")
-    object Read : Screen("read/{bookId}/{totalChapters}/{savedChapter}") {
-        fun createRoute(bookId: Int, totalChapters: Int, savedChapter: Int) =
-            "read/$bookId/$totalChapters/$savedChapter"
+    // בתוך sealed class Screen
+    object Read : Screen("read/{bookId}/{totalChapters}/{savedChapter}/{scrollProgress}") {
+        fun createRoute(bookId: Int, totalChapters: Int, savedChapter: Int, scrollProgress: Float) =
+            "read/$bookId/$totalChapters/$savedChapter/$scrollProgress"
     }
 
     object RequestNew : Screen("request_new")
@@ -41,7 +42,7 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
+fun BookWormHoleApp(startDestination: String = Screen.Login.route, onLanguageChange: (String) -> Unit) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
@@ -82,8 +83,8 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
 
         composable(Screen.Request.route) {
             LibraryScreen(
-                onNavigateToRead = { bookId, totalChapters, savedChapter ->
-                    navController.navigate(Screen.Read.createRoute(bookId, totalChapters, savedChapter))
+                onNavigateToRead = { bookId, totalChapters, savedChapter, scrollProgress ->
+                    navController.navigate(Screen.Read.createRoute(bookId, totalChapters, savedChapter, scrollProgress))
                 },
                 onNavigateToRequestNew = { navController.navigate(Screen.RequestNew.route) },
                 onNavigateToAdmin = { navController.navigate(Screen.Admin.route) },
@@ -91,7 +92,8 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                 onNavigateToBookDetail = { bookId ->
                     navController.navigate("book_detail/$bookId")
                 },
-                onLogout = performLogout
+                onLogout = performLogout,
+                onLanguageChange = onLanguageChange
             )
         }
 
@@ -104,9 +106,20 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
             BookDetailScreen(
                 bookId = bookId,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToRead = { id, totalChapters, currentChapter ->
-                    navController.navigate("read/$id/$totalChapters/$currentChapter")
+                onNavigateToRead = { id, totalChapters, currentChapter, currentScroll  ->
+                    navController.navigate("read/$id/$totalChapters/$currentChapter/$currentScroll")
                 }
+            )
+        }
+
+        composable(
+            route = "highlights/{bookId}",
+            arguments = listOf(androidx.navigation.navArgument("bookId") { type = androidx.navigation.NavType.IntType })
+        ) { backStackEntry ->
+            val bookId = backStackEntry.arguments?.getInt("bookId") ?: 0
+            com.PoorMenKindle.android.ui.screens.HighlightsScreen(
+                bookId = bookId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -132,18 +145,22 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
             arguments = listOf(
                 navArgument("bookId") { type = NavType.IntType },
                 navArgument("totalChapters") { type = NavType.IntType },
-                navArgument("savedChapter") { type = NavType.IntType }
+                navArgument("savedChapter") { type = NavType.IntType },
+                navArgument("scrollProgress") { type = NavType.FloatType }
             )
         ) { backStackEntry ->
             val bookId = backStackEntry.arguments?.getInt("bookId") ?: 0
             val totalChapters = backStackEntry.arguments?.getInt("totalChapters") ?: 0
             val savedChapter = backStackEntry.arguments?.getInt("savedChapter") ?: 0
+            val scrollProgress = backStackEntry.arguments?.getFloat("scrollProgress") ?: 0f
 
             ReadScreen(
                 bookId = bookId,
                 totalChapters = totalChapters,
                 initialChapter = savedChapter,
-                onNavigateBack = { navController.popBackStack() }
+                initialScrollProgress = scrollProgress,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToHighlights = { id -> navController.navigate("highlights/$id") }
             )
         }
 
@@ -161,5 +178,6 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                 onLogout = performLogout
             )
         }
+
     }
 }

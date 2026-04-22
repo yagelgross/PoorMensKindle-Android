@@ -7,6 +7,7 @@ import android.view.ActionMode
 import androidx.core.net.toUri
 import android.view.Menu
 import android.view.MenuItem
+import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,10 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.ceil
+import androidx.core.graphics.scale
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,13 +51,41 @@ fun LocalReadScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    val view = androidx.compose.ui.platform.LocalView.current
+
+    DisposableEffect(Unit) {
+        activity?.window?.let { window ->
+            // Keep the screen awake
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+            // Enable True Immersive Mode
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        }
+
+        onDispose {
+            activity?.window?.let { window ->
+                // Let the screen sleep again
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+                // Restore the System Bars when leaving the book
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
 
     // --- Settings State ---
-    var fontSize by remember { mutableIntStateOf(18) }
-    var lineSpacing by remember { mutableFloatStateOf(1.6f) }
-    var theme by remember { mutableStateOf("Dark") }
-    var selectedFont by remember { mutableStateOf("Palatino") } // <-- NEW: Font State restored
+    val sharedPrefs = context.getSharedPreferences("ReadingSettings", android.content.Context.MODE_PRIVATE)
+
+    var fontSize by remember { mutableIntStateOf(sharedPrefs.getInt("font_size", 18)) }
+    var lineSpacing by remember { mutableFloatStateOf(sharedPrefs.getFloat("line_spacing", 1.6f)) }
+    var theme by remember { mutableStateOf(sharedPrefs.getString("theme", "Dark") ?: "Dark") }
+    var selectedFont by remember { mutableStateOf(sharedPrefs.getString("font", "Merriweather") ?: "Merriweather") }
+    var volumePagingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("volume_paging", false)) }
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
@@ -130,13 +163,12 @@ fun LocalReadScreen(
                     errorMessage = "Could not open file stream."
                     return@withContext
                 }
-                // If it crashes here, it will be caught and the exact reason displayed
                 val book = EpubReader().readEpub(inputStream)
                 epubBook = book
                 totalChapters = book.spine.size()
                 chapterTitle = book.title ?: "Unknown Title"
             }
-        } catch (e: Throwable) { // Catch Throwable to trap NoClassDefFoundError
+        } catch (e: Throwable) {
             errorMessage = "EPUB Parse Crash: ${e::class.java.simpleName} - ${e.message}"
         }
     }
@@ -151,39 +183,26 @@ fun LocalReadScreen(
             val doc = Jsoup.parse(rawHtml)
             val chapterHref = resource.href
 
-            // --- Robust Image Extraction ---
-            val images = doc.select("img, image") // Catch both <img> and SVG <image>
+            // --- LIGHTWEIGHT IMAGE INTERCEPTION PREP ---
+            val images = doc.select("img, image")
             for (img in images) {
                 var src = img.attr("src").ifEmpty { img.attr("xlink:href") }
                 src = java.net.URLDecoder.decode(src, "UTF-8")
 
-                var imageResource = book.resources.getByHref(src)
+                var resolvedHref = src
+                val chapterDir = chapterHref.substringBeforeLast("/", "")
 
-                // If direct match fails, calculate the relative path manually
-                if (imageResource == null) {
-                    val chapterDir = chapterHref.substringBeforeLast("/", "")
-
-                    var resolvedHref = src
-                    if (src.startsWith("../")) {
-                        // Go up one directory
-                        val parentDir = chapterDir.substringBeforeLast("/", "")
-                        val cleanSrc = src.replaceFirst("../", "")
-                        resolvedHref = if (parentDir.isEmpty()) cleanSrc else "$parentDir/$cleanSrc"
-                    } else if (chapterDir.isNotEmpty() && !src.startsWith("/")) {
-                        // Same directory
-                        resolvedHref = "$chapterDir/$src"
-                    }
-
-                    imageResource = book.resources.getByHref(resolvedHref)
+                if (src.startsWith("../")) {
+                    val parentDir = chapterDir.substringBeforeLast("/", "")
+                    val cleanSrc = src.replaceFirst("../", "")
+                    resolvedHref = if (parentDir.isEmpty()) cleanSrc else "$parentDir/$cleanSrc"
+                } else if (chapterDir.isNotEmpty() && !src.startsWith("/")) {
+                    resolvedHref = "$chapterDir/$src"
                 }
 
-                // Inject Base64
-                if (imageResource != null) {
-                    val imgData = imageResource.data
-                    val base64Img = android.util.Base64.encodeToString(imgData, android.util.Base64.NO_WRAP)
-                    val mimeType = imageResource.mediaType?.name ?: "image/jpeg"
-                    img.attr("src", "data:$mimeType;base64,$base64Img")
-                }
+                // Encode the path safely and rewrite the tag to trigger our interceptor
+                val safeHref = java.net.URLEncoder.encode(resolvedHref, "UTF-8")
+                img.attr("src", "local://$safeHref")
             }
 
             val plainText = doc.text()
@@ -191,12 +210,16 @@ fun LocalReadScreen(
             val minutes = ceil(wordCount / 225.0).toInt()
             timeRemaining = if (minutes > 1) "$minutes mins left" else "< 1 min left"
 
-            // NEW: Added dynamic font-family and responsive CSS for embedded <img> tags
+            val allFontsCss = getAllFontsCss()
+
             chapterHtml = """
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style id="custom-font-style">
+                        $allFontsCss
+                    </style>
                     <style>
                         body { 
                             font-family: '$selectedFont', serif; 
@@ -261,10 +284,7 @@ fun LocalReadScreen(
             },
             confirmButton = {
                 TextButton(onClick = { toolDialogTitle = "" }) {
-                    Text(
-                        "Close",
-                        color = Color(0xFF4dd0e1)
-                    )
+                    Text("Close", color = Color(0xFF4dd0e1))
                 }
             },
             containerColor = Color(0xFF2b2b2b)
@@ -275,86 +295,112 @@ fun LocalReadScreen(
         AlertDialog(
             onDismissRequest = { showSettingsDialog = false },
             title = {
-                Text(
-                    "Reading Settings",
-                    color = Color(0xFF4dd0e1),
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif
-                )
+                Text("Reading Settings", color = Color(0xFF4dd0e1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // --- Font Size ---
                     Column {
                         Text("Font Size: ${fontSize}px", color = Color.White)
                         Slider(
                             value = fontSize.toFloat(),
-                            onValueChange = { fontSize = it.toInt() },
+                            onValueChange = {
+                                fontSize = it.toInt()
+                                sharedPrefs.edit().putInt("font_size", fontSize).apply()
+                            },
                             valueRange = 12f..36f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFF4dd0e1),
-                                activeTrackColor = Color(0xFF4dd0e1)
-                            )
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF4dd0e1), activeTrackColor = Color(0xFF4dd0e1))
                         )
                     }
+                    // --- Line Spacing ---
                     Column {
                         Text("Line Spacing: ${lineSpacing}x", color = Color.White)
                         Slider(
                             value = lineSpacing,
-                            onValueChange = { lineSpacing = (Math.round(it * 10) / 10.0).toFloat() },
+                            onValueChange = {
+                                lineSpacing = (Math.round(it * 10) / 10.0).toFloat()
+                                sharedPrefs.edit().putFloat("line_spacing", lineSpacing).apply()
+                            },
                             valueRange = 1.0f..2.5f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFF4dd0e1),
-                                activeTrackColor = Color(0xFF4dd0e1)
-                            )
+                            colors = SliderDefaults.colors(thumbColor = Color(0xFF4dd0e1), activeTrackColor = Color(0xFF4dd0e1))
                         )
                     }
-                    // NEW: Font Family Selector
+                    // --- Font Selection ---
                     Column {
                         Text("Font", color = Color.White, modifier = Modifier.padding(bottom = 8.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                         ) {
-                            listOf("Palatino", "Serif", "Sans-Serif", "Monospace").forEach { fontOption ->
+                            listOf(
+                                "Serif", "Sans-Serif", "Monospace",
+                                "Alegreya", "Arial", "Arimo", "Georgia",
+                                "Libre Baskerville", "Merriweather", "Times New Roman",
+                                "Frank Ruhl Libre", "Heebo", "Rubik"
+                            ).forEach { fontOption ->
                                 Button(
-                                    onClick = { selectedFont = fontOption },
+                                    onClick = {
+                                        selectedFont = fontOption
+                                        sharedPrefs.edit().putString("font", selectedFont).apply()
+                                    },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (selectedFont == fontOption) Color(
-                                            0xFF4dd0e1
-                                        ) else Color(0xFF444444),
+                                        containerColor = if (selectedFont == fontOption) Color(0xFF4dd0e1) else Color(0xFF444444),
                                         contentColor = if (selectedFont == fontOption) Color.Black else Color.White
                                     ),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                ) { Text(fontOption, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                ) {
+                                    Text(fontOption, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
+                    // --- Theme Selection ---
                     Column {
                         Text("Theme", color = Color.White, modifier = Modifier.padding(bottom = 8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             listOf("Dark", "Light", "Sepia").forEach { themeOption ->
                                 Button(
-                                    onClick = { theme = themeOption },
+                                    onClick = {
+                                        theme = themeOption
+                                        sharedPrefs.edit().putString("theme", theme).apply()
+                                    },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (theme == themeOption) Color(0xFF4dd0e1) else Color(
-                                            0xFF444444
-                                        ), contentColor = if (theme == themeOption) Color.Black else Color.White
+                                        containerColor = if (theme == themeOption) Color(0xFF4dd0e1) else Color(0xFF444444),
+                                        contentColor = if (theme == themeOption) Color.Black else Color.White
                                     ),
                                     modifier = Modifier.weight(1f),
                                     contentPadding = PaddingValues(0.dp)
-                                ) { Text(themeOption, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                                ) {
+                                    Text(themeOption, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
+                    }
+                    // --- Volume Paging Toggle ---
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Volume Button Paging", color = Color.White)
+                        Switch(
+                            checked = volumePagingEnabled,
+                            onCheckedChange = {
+                                volumePagingEnabled = it
+                                sharedPrefs.edit().putBoolean("volume_paging", volumePagingEnabled).apply()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.Black,
+                                checkedTrackColor = Color(0xFF4dd0e1),
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color(0xFF444444)
+                            )
+                        )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showSettingsDialog = false }) {
-                    Text(
-                        "Close",
-                        color = Color(0xFF4dd0e1)
-                    )
-                }
+                TextButton(onClick = { showSettingsDialog = false }) { Text("Close", color = Color(0xFF4dd0e1)) }
             },
             containerColor = Color(0xFF2b2b2b)
         )
@@ -388,12 +434,7 @@ fun LocalReadScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showChapterDialog = false }) {
-                    Text(
-                        "Close",
-                        color = Color.Gray
-                    )
-                }
+                TextButton(onClick = { showChapterDialog = false }) { Text("Close", color = Color.Gray) }
             },
             containerColor = Color(0xFF2b2b2b)
         )
@@ -402,6 +443,7 @@ fun LocalReadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.displayCutoutPadding(),
                 title = {
                     Text(
                         chapterTitle.ifEmpty { "Chapter ${currentChapterIndex + 1}" },
@@ -480,6 +522,8 @@ fun LocalReadScreen(
                         SmartWebView(ctx).apply {
                             settings.javaScriptEnabled = true
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+                            settings.allowFileAccess = true
 
                             actionModeCallback = object : ActionMode.Callback {
                                 override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
@@ -506,6 +550,83 @@ fun LocalReadScreen(
                                 }
 
                                 override fun onDestroyActionMode(mode: ActionMode?) {}
+                            }
+
+                            webViewClient = object : android.webkit.WebViewClient() {
+
+                                // --- DOWNSAMPLING IMAGE INTERCEPTOR ---
+                                // --- COMBINED IMAGE & FONT INTERCEPTOR ---
+                                override fun shouldInterceptRequest(
+                                    view: WebView?,
+                                    request: android.webkit.WebResourceRequest?
+                                ): android.webkit.WebResourceResponse? {
+                                    val url = request?.url?.toString() ?: return null
+
+                                    // 1. Intercept Fonts
+                                    if (url.startsWith("https://appassets.local/fonts/")) {
+                                        val fontFileName = url.substringAfterLast("/")
+                                        val cleanFileName = java.net.URLDecoder.decode(fontFileName, "UTF-8")
+                                        try {
+                                            val inputStream = ctx.assets.open("fonts/$cleanFileName")
+                                            val response = android.webkit.WebResourceResponse("font/ttf", "UTF-8", inputStream)
+                                            response.responseHeaders = mapOf("Access-Control-Allow-Origin" to "*")
+                                            return response
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    }
+
+                                    // 2. Intercept Local EPUB Images
+                                    if (url.startsWith("local://")) {
+                                        val encodedPath = url.replace("local://", "")
+                                        val imagePath = java.net.URLDecoder.decode(encodedPath, "UTF-8")
+                                        val imageResource = epubBook?.resources?.getByHref(imagePath)
+
+                                        if (imageResource != null) {
+                                            val mimeType = imageResource.mediaType?.name ?: "image/jpeg"
+                                            val originalBitmap = android.graphics.BitmapFactory.decodeByteArray(imageResource.data, 0, imageResource.data.size)
+
+                                            if (originalBitmap != null) {
+                                                val maxWidth = 1080f
+                                                val scale = if (originalBitmap.width > maxWidth) maxWidth / originalBitmap.width else 1f
+
+                                                val finalBitmap = if (scale < 1f) {
+                                                    originalBitmap.scale(
+                                                        (originalBitmap.width * scale).toInt(),
+                                                        (originalBitmap.height * scale).toInt()
+                                                    )
+                                                } else {
+                                                    originalBitmap
+                                                }
+
+                                                val outputStream = java.io.ByteArrayOutputStream()
+                                                finalBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+                                                val inputStream = java.io.ByteArrayInputStream(outputStream.toByteArray())
+
+                                                originalBitmap.recycle()
+                                                if (scale < 1f) finalBitmap.recycle()
+
+                                                return android.webkit.WebResourceResponse(mimeType, "UTF-8", inputStream)
+                                            }
+                                        }
+                                    }
+                                    return super.shouldInterceptRequest(view, request)
+                                }
+
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    val bgColor = when (theme) { "Light" -> "#ffffff"; "Sepia" -> "#f4ecd8"; else -> "#2b2b2b" }
+                                    val textColor = when (theme) { "Light" -> "#000000"; "Sepia" -> "#5b4636"; else -> "#d4d4d4" }
+
+                                    val js = """
+    document.body.style.fontSize = '${fontSize}px';
+    document.body.style.lineHeight = '${lineSpacing}';
+    document.body.style.backgroundColor = '$bgColor';
+    document.body.style.color = '$textColor';
+    document.body.style.fontFamily = "'${selectedFont}', serif";
+""".trimIndent()
+                                    view?.evaluateJavascript(js, null)
+                                }
                             }
 
                             val gestureDetector = android.view.GestureDetector(
@@ -536,37 +657,47 @@ fun LocalReadScreen(
                                     }
                                 })
                             setOnTouchListener { view, event ->
-                                val handled =
-                                    gestureDetector.onTouchEvent(event); if (handled) view.performClick(); false
+                                val handled = gestureDetector.onTouchEvent(event); if (handled) view.performClick(); false
                             }
                         }
                     },
                     update = { webView ->
                         if (webView.tag != chapterHtml) {
-                            webView.loadDataWithBaseURL(null, chapterHtml, "text/html", "UTF-8", null)
+                            webView.loadDataWithBaseURL("file:///android_asset/", chapterHtml, "text/html", "UTF-8", null)
                             webView.tag = chapterHtml
                         }
 
-                        val bgColor = when (theme) {
-                            "Light" -> "#ffffff"
-                            "Sepia" -> "#f4ecd8"
-                            else -> "#2b2b2b"
-                        }
-                        val textColor = when (theme) {
-                            "Light" -> "#000000"
-                            "Sepia" -> "#5b4636"
-                            else -> "#d4d4d4"
-                        }
+                        val bgColor = when (theme) { "Light" -> "#ffffff"; "Sepia" -> "#f4ecd8"; else -> "#2b2b2b" }
+                        val textColor = when (theme) { "Light" -> "#000000"; "Sepia" -> "#5b4636"; else -> "#d4d4d4" }
 
-                        // NEW: Added fontFamily to dynamic injection
                         val js = """
-                            document.body.style.fontSize = '${fontSize}px';
-                            document.body.style.lineHeight = '${lineSpacing}';
-                            document.body.style.backgroundColor = '$bgColor';
-                            document.body.style.color = '$textColor';
-                            document.body.style.fontFamily = '$selectedFont';
-                        """.trimIndent()
+    document.body.style.fontSize = '${fontSize}px';
+    document.body.style.lineHeight = '${lineSpacing}';
+    document.body.style.backgroundColor = '$bgColor';
+    document.body.style.color = '$textColor';
+    document.body.style.fontFamily = "'${selectedFont}', serif";
+""".trimIndent()
                         webView.evaluateJavascript(js, null)
+
+                        webView.setOnKeyListener { _, keyCode, event ->
+                            if (volumePagingEnabled && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                                when (keyCode) {
+                                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                                        // Volume Down = Next Chapter
+                                        if (currentChapterIndex < totalChapters - 1) currentChapterIndex++
+                                        true // 'true' consumes the event so media volume doesn't change
+                                    }
+                                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
+                                        // Volume Up = Previous Chapter
+                                        if (currentChapterIndex > 0) currentChapterIndex--
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else {
+                                false // If toggle is off, let the phone change the actual media volume
+                            }
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 )

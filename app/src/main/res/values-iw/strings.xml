@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    // Library screen strings
+    <string name="app_name">Poor Men\'s Kindle</string>
+    <string name="library_tab">ספרייה</string>
+    <string name="admin_panel">לוח בקרה (מנהל)</string>
+    <string name="request_book">בקשת ספר</string>
+    <string name="offline_epub">טעינת קובץ EPUB</string>
+    <string name="log_out">התנתקות</string>
+    <string name="switch_language">English / עברית</string>
+    // Admin screen strings
+    <string name="admin_users_tab">משתמשים</string>
+    <string name="admin_books_tab">ספרים</string>
+    <string name="admin_requests_tab">בקשות</string>
+    <string name="admin_loading">טוען...</string>
+    <string name="admin_error">שגיאה: %1$s</string>
+    <string name="admin_add_user_title">הוספת משתמש חדש</string>
+    <string name="admin_username_label">שם משתמש</string>
+    <string name="admin_password_label">סיסמה</string>
+    <string name="admin_is_admin_check">מנהל מערכת</string>
+    <string name="admin_add_button">הוסף</string>
+    <string name="admin_cancel_button">ביטול</string>
+    <string name="admin_failed_add_user">הוספת משתמש נכשלה.</string>
+    <string name="admin_add_book_title">הוספת ספר חדש</string>
+    <string name="admin_book_title_label">כותרת</string>
+    <string name="admin_book_author_label">מחבר</string>
+    <string name="admin_book_series_name">שם סדרה (אופציונלי)</string>
+    <string name="admin_book_series_number">מספר בסדרה (למשל 1 או 1.5)</string>
+    <string name="admin_uploading_msg">מעלה ומחלץ קובץ...</string>
+    <string name="admin_select_epub">📁 בחר קובץ EPUB</string>
+    <string name="admin_epub_selected">✔ קובץ נבחר</string>
+    <string name="admin_book_added">הספר נוסף!</string>
+    <string name="admin_upload_failed">העלאה נכשלה: %1$d</string>
+    <string name="admin_upload_button">העלה</string>
+    <string name="admin_dashboard_title">⚙ לוח בקרה למנהלים</string>
+    <string name="admin_add_user_desc">הוסף משתמש</string>
+    <string name="admin_add_book_desc">הוסף ספר</string>
+    <string name="admin_search_placeholder">חיפוש בנתונים נטענים...</string>
+    <string name="admin_user_id">מזהה: %1$d | %2$s</string>
+    <string name="admin_label_admin">מנהל</string>
+    <string name="admin_joined">הצטרף: %1$s</string>
+    <string name="admin_last_login">כניסה אחרונה: %1$s</string>
+    <string name="admin_never_login">אף פעם</string>
+    <string name="admin_demote_button">הורד הרשאה</string>
+    <string name="admin_promote_button">קדם למנהל</string>
+    <string name="admin_delete_button">מחק</string>
+    <string name="admin_chapters_count">מזהה: %1$d | %2$d פרקים</string>
+    <string name="admin_req_by">מאת: %1$s</string>
+    <string name="admin_req_requested_by">התבקש ע\"י: %1$s</string>
+    <string name="admin_req_status">סטטוס: %1$s</string>
+    <string name="admin_approve_button">✔ אישור</string>
+    <string name="admin_reject_button">✖ דחייה</string>
+</resources>

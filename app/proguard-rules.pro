@@ -1,21 +1,24 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# 1. Essential Metadata (Required for Reflection)
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 2. Retrofit + KOTLIN COROUTINES (This fixes the suspend function crash!)
+-keep,allowobfuscation,allowshrinking interface kotlin.coroutines.Continuation
+-dontwarn retrofit2.**
+-keep class retrofit2.** { *; }
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# 3. Gson TypeTokens (Required for List<T> parsing)
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class com.google.gson.** { *; }
+-keep class sun.misc.Unsafe { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# 4. Protect Your API & Models
+-keep class com.PoorMenKindle.android.network.** { *; }
+
+# 5. Ignore the EPUB XML Warning
+-dontwarn org.xmlpull.v1.**

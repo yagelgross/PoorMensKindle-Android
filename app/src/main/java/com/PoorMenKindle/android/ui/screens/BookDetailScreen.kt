@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,13 +39,19 @@ import com.PoorMenKindle.android.network.NetworkManager
 fun BookDetailScreen(
     bookId: Int,
     onNavigateBack: () -> Unit,
-    onNavigateToRead: (Int, Int, Int) -> Unit
+    onNavigateToRead: (Int, Int, Int, Float) -> Unit
 ) {
     var book by remember { mutableStateOf<BookInfo?>(null) }
     var currentChapter by remember { mutableStateOf(0) }
+    var currentScroll by remember { mutableFloatStateOf(0f) }
     var coverBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isDownloadedLocally by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+    var isDownloading by remember { mutableStateOf(false) }
 
     val backgroundBrush = Brush.verticalGradient(
         colors = listOf(
@@ -59,6 +66,11 @@ fun BookDetailScreen(
     LaunchedEffect(bookId) {
         coroutineScope.launch {
             try {
+
+                val db = com.PoorMenKindle.android.data.local.AppDatabase.getDatabase(context)
+                val localBook = withContext(Dispatchers.IO) { db.bookDao().getDownloadedBook(bookId) }
+                isDownloadedLocally = (localBook != null)
+
                 // 1. Fetch the specific book details
                 val bookResponse = withContext(Dispatchers.IO) { NetworkManager.api.getBook(bookId) }
                 if (bookResponse.isSuccessful) {
@@ -69,16 +81,22 @@ fun BookDetailScreen(
                 val progResponse = withContext(Dispatchers.IO) { NetworkManager.api.getProgress(bookId) }
                 if (progResponse.isSuccessful) {
                     currentChapter = progResponse.body()?.current_chapter ?: 0
+                    currentScroll = progResponse.body()?.scroll_progress ?: 0f
                 }
 
                 // 3. Load the cover image (Check memory cache first to save network calls!)
-                if (CoverCache.bitmaps.containsKey(bookId)) {
-                    coverBitmap = CoverCache.bitmaps[bookId]
+                val cachedCover = CoverCache.bitmaps.get(bookId)
+
+                if (cachedCover != null) {
+                    coverBitmap = cachedCover
                 } else {
                     val coverResponse = withContext(Dispatchers.IO) { NetworkManager.api.getCover(bookId) }
                     coverResponse.body()?.cover_image?.let { base64String ->
                         val bytes = Base64.decode(base64String, Base64.DEFAULT)
-                        coverBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap()
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap()
+
+                        CoverCache.bitmaps.put(bookId, bitmap)
+                        coverBitmap = bitmap
                     }
                 }
             } catch (e: Exception) {
@@ -207,15 +225,13 @@ fun BookDetailScreen(
 
                         // --- READ BUTTON ---
                         Button(
-                            onClick = { onNavigateToRead(b.id, b.total_chapters, currentChapter) },
+                            onClick = { onNavigateToRead(b.id, b.total_chapters, currentChapter, currentScroll) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(55.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4dd0e1)),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            // Because the button is in an RTL container, the text direction is mirrored.
-                            // We force LTR for the button content so the play icon stays on the left.
                             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                 Text(
                                     text = if (currentChapter > 0) "Continue Reading (Ch. ${currentChapter + 1})" else "Start Reading",
@@ -223,6 +239,61 @@ fun BookDetailScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (isDownloading) {
+                            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Downloading... ${(downloadProgress * 100).toInt()}%", color = Color(0xFF032579), fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = { downloadProgress },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                                    color = Color(0xFF4dd0e1),
+                                    trackColor = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        } else if (isDownloadedLocally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("✅ Saved for Offline Reading", color = Color(0xFF2ecc71), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        com.PoorMenKindle.android.data.local.OfflineSyncManager.removeLocalBook(context, b.id)
+                                        isDownloadedLocally = false
+                                    }
+                                },
+                                modifier = Modifier.background(Color(0xFFe74c3c).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Download", tint = Color(0xFFe74c3c))
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    isDownloading = true
+                                    coroutineScope.launch {
+                                        val success = com.PoorMenKindle.android.data.local.OfflineSyncManager.downloadBookFull(
+                                            context = context,
+                                            bookId = b.id,
+                                            title = b.title,
+                                            author = b.author,
+                                            totalChapters = b.total_chapters
+                                        ) { current, total ->
+                                            downloadProgress = current.toFloat() / total.toFloat()
+                                        }
+                                        isDownloading = false
+                                        if (success) isDownloadedLocally = true
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF032579)),
+                                border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF032579))
+                            ) {
+                                Text("⬇ Download for Offline", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             }
                         }
 
