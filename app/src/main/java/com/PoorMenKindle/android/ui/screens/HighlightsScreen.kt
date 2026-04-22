@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,21 +40,15 @@ fun HighlightsScreen(bookId: Int, onNavigateBack: () -> Unit) {
         coroutineScope.launch(Dispatchers.IO) {
             val db = AppDatabase.getDatabase(context)
             val dao = db.bookDao()
-
-            // 1. טעינה מקומית מיידית
             var localHls = dao.getHighlightsForBook(bookId)
             highlights = localHls.map {
                 HighlightItem(it.localId, it.chapterIndex, it.highlightedText, null, it.color, "")
             }
             isLoading = false
-
-            // 2. סנכרון מול השרת
             try {
                 val response = NetworkManager.api.getHighlights(bookId)
                 if (response.isSuccessful) {
                     val serverHls = response.body() ?: emptyList()
-
-                    // שמירת הדגשות חדשות מהשרת למכשיר
                     serverHls.forEach { serverHl ->
                         val existsLocally = localHls.any {
                             it.highlightedText == serverHl.highlighted_text && it.chapterIndex == serverHl.chapter_index
@@ -71,14 +65,12 @@ fun HighlightsScreen(bookId: Int, onNavigateBack: () -> Unit) {
                         }
                     }
 
-                    // רענון הרשימה המקומית אחרי הסנכרון
                     localHls = dao.getHighlightsForBook(bookId)
                     highlights = localHls.map {
                         HighlightItem(it.localId, it.chapterIndex, it.highlightedText, null, it.color, "")
                     }
                 }
             } catch (e: Exception) {
-                // מתעלמים - אם אין אינטרנט, הנתונים המקומיים מספיקים
             }
         }
     }
@@ -89,7 +81,7 @@ fun HighlightsScreen(bookId: Int, onNavigateBack: () -> Unit) {
                 title = { Text("My Highlights", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E), titleContentColor = Color.White)

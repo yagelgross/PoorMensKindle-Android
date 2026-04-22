@@ -42,7 +42,7 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun BookWormHoleApp(startDestination: String = Screen.Login.route, onLanguageChange: (String) -> Unit) {
+fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
@@ -92,8 +92,7 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route, onLanguageCha
                 onNavigateToBookDetail = { bookId ->
                     navController.navigate("book_detail/$bookId")
                 },
-                onLogout = performLogout,
-                onLanguageChange = onLanguageChange
+                onLogout = performLogout
             )
         }
 

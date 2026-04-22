@@ -50,8 +50,7 @@ fun LibraryScreen(
     onNavigateToAdmin: () -> Unit,
     onNavigateToLocalRead: (String) -> Unit,
     onNavigateToBookDetail: (Int) -> Unit,
-    onLogout: () -> Unit,
-    onLanguageChange: (String) -> Unit
+    onLogout: () -> Unit
 ) {
     var books by remember { mutableStateOf<List<BookInfo>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
