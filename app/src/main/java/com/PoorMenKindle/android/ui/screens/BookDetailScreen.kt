@@ -128,7 +128,6 @@ fun BookDetailScreen(
             }
         } else {
             book?.let { b ->
-                // 1. Detect language dynamically
                 val isHebrew = isTextHebrew(b.title) || isTextHebrew(b.summary)
                 val layoutDir = if (isHebrew) LayoutDirection.Rtl else LayoutDirection.Ltr
 
@@ -142,12 +141,10 @@ fun BookDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
 
-                        // --- HEADER (Cover + Title/Author Side-by-Side) ---
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // SMALLER COVER
                             Box(
                                 modifier = Modifier
                                     .height(160.dp) // Reduced from 220.dp
@@ -170,9 +167,6 @@ fun BookDetailScreen(
 
                             Spacer(modifier = Modifier.width(20.dp))
 
-
-
-                            // TITLE & AUTHOR
                             Column(
                                 modifier = Modifier.weight(1f),
                                 horizontalAlignment = Alignment.Start
@@ -194,7 +188,7 @@ fun BookDetailScreen(
                                     Text(
                                         text = "${b.series_name} $numStr".trim(),
                                         fontSize = 14.sp,
-                                        color = Color(0xFFe67e22), // Matching the orange from your Admin screen
+                                        color = Color(0xFFe67e22),
                                         fontStyle = FontStyle.Italic,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 4.dp)
@@ -223,7 +217,7 @@ fun BookDetailScreen(
 
                         Spacer(modifier = Modifier.height(30.dp))
 
-                        // --- READ BUTTON ---
+                        // Read Button
                         Button(
                             onClick = { onNavigateToRead(b.id, b.total_chapters, currentChapter, currentScroll) },
                             modifier = Modifier
@@ -259,6 +253,8 @@ fun BookDetailScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("✅ Saved for Offline Reading", color = Color(0xFF2ecc71), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             }
+
+                            Spacer(modifier = Modifier.width(8.dp))
 
                             IconButton(
                                 onClick = {

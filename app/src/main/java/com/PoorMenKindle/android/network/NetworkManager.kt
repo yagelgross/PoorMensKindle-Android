@@ -18,20 +18,17 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 object NetworkManager {
-    // Change this to match your FastAPI server IP
     private const val BASE_URL = "https://100.99.101.1:8000"
 
     var jwtToken: String? = null
     var isAdmin: Boolean = false
 
-    // --- NEW: Application Context for Cache ---
     private var appContext: Context? = null
 
     fun init(context: Context) {
         appContext = context.applicationContext
     }
 
-    // Interceptor to attach the JWT token to every request automatically
     private val authInterceptor = Interceptor { chain ->
         val requestBuilder = chain.request().newBuilder()
         jwtToken?.let {
@@ -40,7 +37,6 @@ object NetworkManager {
         chain.proceed(requestBuilder.build())
     }
 
-    // --- NEW: Smart Cache Interceptor ---
     private val cacheInterceptor = Interceptor { chain ->
         var request = chain.request()
 
@@ -63,12 +59,10 @@ object NetworkManager {
         }
     }
 
-    // Logging interceptor so you can see API calls in the Android Studio Logcat
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
-    // Unsafe OkHttpClient to bypass localhost HTTPS warnings
     private val unsafeOkHttpClient: OkHttpClient by lazy {
         try {
             val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
@@ -81,16 +75,15 @@ object NetworkManager {
             sslContext.init(null, trustAllCerts, SecureRandom())
             val sslSocketFactory = sslContext.socketFactory
 
-            // --- NEW: Set up a 50MB cache folder on the phone ---
             val cacheSize = (50 * 1024 * 1024).toLong()
             val myCache = appContext?.let { Cache(File(it.cacheDir, "book_cache"), cacheSize) }
 
             OkHttpClient.Builder()
                 .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
                 .hostnameVerifier { _, _ -> true }
-                .cache(myCache) // <-- Attach the cache
+                .cache(myCache)
                 .addInterceptor(authInterceptor)
-                .addInterceptor(cacheInterceptor) // <-- Attach the cache rules
+                .addInterceptor(cacheInterceptor)
                 .addInterceptor(loggingInterceptor)
                 .connectTimeout(60, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -119,7 +112,7 @@ object NetworkManager {
         isAdmin = false
     }
 
-    // Helper function to check if the phone actually has internet ---
+    // Helper function to check if the phone actually has internet
     private fun hasNetwork(context: Context?): Boolean {
         if (context == null) return false
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

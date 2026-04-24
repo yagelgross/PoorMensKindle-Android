@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.PoorMenKindle.android.network.AdminAddBookRequest
 import com.PoorMenKindle.android.network.BookInfo
 import com.PoorMenKindle.android.network.NetworkManager
 import com.PoorMenKindle.android.network.NewUserRequest
@@ -468,6 +468,16 @@ fun RequestCard(req: RequestItem, scope: kotlinx.coroutines.CoroutineScope, onRe
             if (req.status == "pending") {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(onClick = {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "rejected") }
+                            onRefresh()
+                        }
+                    }, modifier = Modifier.background(Color(0xFFe74c3c).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Download", tint = Color(0xFFe74c3c))
+                    }
+
                     Button(onClick = {
                         scope.launch {
                             withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "approved") }
@@ -481,6 +491,18 @@ fun RequestCard(req: RequestItem, scope: kotlinx.coroutines.CoroutineScope, onRe
                             onRefresh()
                         }
                     }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))) { Text("✖ Reject") }
+                }
+            }
+            else if (req.status == "approved") {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        scope.launch {
+                            withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "rejected") }
+                            onRefresh()
+                        }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))) { Text("Delete") }
+
                 }
             }
         }
