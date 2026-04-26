@@ -20,7 +20,11 @@ object OfflineSyncManager {
             val dao = db.bookDao()
 
             val coverResponse = NetworkManager.api.getCover(bookId)
-            val coverBase64 = if (coverResponse.isSuccessful) coverResponse.body()?.cover_image else null
+            val coverBase64 = if (coverResponse.isSuccessful) {
+                coverResponse.body()?.bytes()?.let { imageBytes ->
+                    android.util.Base64.encodeToString(imageBytes, android.util.Base64.DEFAULT)
+                }
+            } else null
 
             val localBook = LocalBook(bookId, title, author, totalChapters, coverBase64)
             dao.insertBook(localBook)

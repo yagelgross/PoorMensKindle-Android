@@ -7,6 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
 
 @Keep
 interface ApiService {
@@ -31,7 +32,7 @@ interface ApiService {
     ): Response<ChapterData>
 
     @GET("/books/{book_id}/cover")
-    suspend fun getCover(@Path("book_id") bookId: Int): Response<BookInfo>
+    suspend fun getCover(@Path("book_id") bookId: Int): Response<ResponseBody>
 
     // --- Progress ---
     @POST("/progress/{book_id}")

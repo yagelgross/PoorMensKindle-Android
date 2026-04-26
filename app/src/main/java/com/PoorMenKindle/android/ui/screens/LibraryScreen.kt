@@ -42,6 +42,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun LibraryScreen(
@@ -155,7 +158,7 @@ fun LibraryScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
-        
+
         // --- TOP BAR ---
         Row(
             modifier = Modifier
@@ -268,7 +271,13 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.width(16.dp))
                             Button(
                                 onClick = {
-                                    onNavigateToRead(readInfo.book_id, readInfo.total_chapters, readInfo.chapter_index, readInfo.scroll_progress) },
+                                    onNavigateToRead(
+                                        readInfo.book_id,
+                                        readInfo.total_chapters,
+                                        readInfo.chapter_index,
+                                        readInfo.scroll_progress
+                                    )
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
                                     contentColor = Color(0xFF2563EB)
@@ -359,10 +368,9 @@ fun LibraryScreen(
     }
 }
 
+
 @Composable
 fun BookCard(book: BookInfo, onClick: () -> Unit) {
-    var coverBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -371,30 +379,6 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
         animationSpec = spring(stiffness = 300f),
         label = "cardScale"
     )
-
-    // Fetch or Load the cover image
-    LaunchedEffect(book.id) {
-        val cachedCover = CoverCache.bitmaps.get(book.id)
-
-        if (cachedCover != null) {
-            coverBitmap = cachedCover
-        } else {
-            try {
-                val response = withContext(Dispatchers.IO) { NetworkManager.api.getCover(book.id) }
-                if (response.isSuccessful) {
-                    response.body()?.cover_image?.let { base64String ->
-                        val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
-                        val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size).asImageBitmap()
-
-                        CoverCache.bitmaps.put(book.id, bitmap)
-                        coverBitmap = bitmap
-                    }
-                }
-            } catch (e: Exception) {
-                // Leave bitmap null
-            }
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -417,24 +401,18 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
                 .background(Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            if (coverBitmap != null) {
-                Image(
-                    bitmap = coverBitmap!!,
-                    contentDescription = "Cover for ${book.title}",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                )
-            } else {
-                Text(
-                    text = book.title,
-                    color = Color(0xFF6B7280),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(8.dp),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
+            // --- COIL REPLACES THE MANUAL FETCHING & CACHING ---
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data("${NetworkManager.BASE_URL}/books/${book.id}/cover")
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Cover for ${book.title}",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -448,7 +426,7 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             lineHeight = 18.sp
         )
-        
+
         Spacer(modifier = Modifier.height(2.dp))
 
         if (!book.series_name.isNullOrEmpty()) {
@@ -476,7 +454,4 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
     }
 }
 
-// --- MEMORY CACHE ---
-object CoverCache {
-    val bitmaps = LruCache<Int, ImageBitmap>(50)
-}
+

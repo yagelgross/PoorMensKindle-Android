@@ -10,7 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +33,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.PoorMenKindle.android.network.BookInfo
 import com.PoorMenKindle.android.network.NetworkManager
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +48,7 @@ fun BookDetailScreen(
     var book by remember { mutableStateOf<BookInfo?>(null) }
     var currentChapter by remember { mutableStateOf(0) }
     var currentScroll by remember { mutableFloatStateOf(0f) }
-    var coverBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var localCoverBase64 by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -70,6 +74,7 @@ fun BookDetailScreen(
                 val db = com.PoorMenKindle.android.data.local.AppDatabase.getDatabase(context)
                 val localBook = withContext(Dispatchers.IO) { db.bookDao().getDownloadedBook(bookId) }
                 isDownloadedLocally = (localBook != null)
+                localCoverBase64 = localBook?.coverBase64
 
                 // 1. Fetch the specific book details
                 val bookResponse = withContext(Dispatchers.IO) { NetworkManager.api.getBook(bookId) }
@@ -85,20 +90,7 @@ fun BookDetailScreen(
                 }
 
                 // 3. Load the cover image (Check memory cache first to save network calls!)
-                val cachedCover = CoverCache.bitmaps.get(bookId)
 
-                if (cachedCover != null) {
-                    coverBitmap = cachedCover
-                } else {
-                    val coverResponse = withContext(Dispatchers.IO) { NetworkManager.api.getCover(bookId) }
-                    coverResponse.body()?.cover_image?.let { base64String ->
-                        val bytes = Base64.decode(base64String, Base64.DEFAULT)
-                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).asImageBitmap()
-
-                        CoverCache.bitmaps.put(bookId, bitmap)
-                        coverBitmap = bitmap
-                    }
-                }
             } catch (e: Exception) {
                 // Handle network error
             } finally {
@@ -113,7 +105,7 @@ fun BookDetailScreen(
                 title = { Text("") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -153,16 +145,21 @@ fun BookDetailScreen(
                                     .background(Color.DarkGray, RoundedCornerShape(8.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (coverBitmap != null) {
-                                    Image(
-                                        bitmap = coverBitmap!!,
-                                        contentDescription = "Cover",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                    )
+                                val imageSource: Any = if (isDownloadedLocally && localCoverBase64 != null) {
+                                    android.util.Base64.decode(localCoverBase64, android.util.Base64.DEFAULT)
                                 } else {
-                                    Text("No Cover", color = Color.White, fontSize = 12.sp)
+                                    "${NetworkManager.BASE_URL}/books/${b.id}/cover"
                                 }
+
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(imageSource)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Cover",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
 
                             Spacer(modifier = Modifier.width(20.dp))

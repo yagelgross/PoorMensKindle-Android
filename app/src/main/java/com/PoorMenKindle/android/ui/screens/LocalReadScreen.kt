@@ -1,17 +1,13 @@
 package com.PoorMenKindle.android.ui.screens
 
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.BatteryManager
 import android.view.ActionMode
 import androidx.core.net.toUri
 import android.view.Menu
 import android.view.MenuItem
 import android.webkit.WebView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,8 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.siegmann.epublib.domain.Book
@@ -35,9 +29,6 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
-import java.time.LocalTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.math.ceil
 import androidx.core.graphics.scale
 import androidx.core.view.WindowCompat
@@ -56,10 +47,7 @@ fun LocalReadScreen(
 
     DisposableEffect(Unit) {
         activity?.window?.let { window ->
-            // Keep the screen awake
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-            // Enable True Immersive Mode
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
@@ -67,10 +55,7 @@ fun LocalReadScreen(
 
         onDispose {
             activity?.window?.let { window ->
-                // Let the screen sleep again
                 window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-                // Restore the System Bars when leaving the book
                 val insetsController = WindowCompat.getInsetsController(window, view)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
@@ -78,7 +63,6 @@ fun LocalReadScreen(
     }
     val coroutineScope = rememberCoroutineScope()
 
-    // --- Settings State ---
     val sharedPrefs = context.getSharedPreferences("ReadingSettings", android.content.Context.MODE_PRIVATE)
 
     var fontSize by remember { mutableIntStateOf(sharedPrefs.getInt("font_size", 18)) }
@@ -86,25 +70,24 @@ fun LocalReadScreen(
     var theme by remember { mutableStateOf(sharedPrefs.getString("theme", "Dark") ?: "Dark") }
     var selectedFont by remember { mutableStateOf(sharedPrefs.getString("font", "Merriweather") ?: "Merriweather") }
     var volumePagingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("volume_paging", false)) }
+    var swipeToChangeChaptersEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("swipe_to_change_chapters", true)) }
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
 
     val fileUri = fileUriString.toUri()
 
-    // EPUB State
     var epubBook by remember { mutableStateOf<Book?>(null) }
     var currentChapterIndex by remember { mutableIntStateOf(0) }
     var totalChapters by remember { mutableIntStateOf(0) }
 
-    // UI State
     var chapterHtml by remember { mutableStateOf("Loading book...") }
     var chapterTitle by remember { mutableStateOf("Opening...") }
     var errorMessage by remember { mutableStateOf("") }
 
-    // Live Footer State
-    var currentTime by remember { mutableStateOf("") }
-    var batteryStatus by remember { mutableStateOf("🔋--%") }
+    // --- SHARED COMPONENTS IN ACTION ---
+    val (currentTime, batteryStatus) = rememberBatteryAndTime(context)
+
     var wordCount by remember { mutableIntStateOf(0) }
     var timeRemaining by remember { mutableStateOf("< 1 min left") }
 
@@ -112,6 +95,10 @@ fun LocalReadScreen(
     var toolDialogContent by remember { mutableStateOf("") }
     var isLoadingTool by remember { mutableStateOf(false) }
     val publicApiClient = remember { OkHttpClient() }
+
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     fun fetchSmartTool(type: Int, rawQuery: String) {
         val query = rawQuery.replace("\"", "").trim()
@@ -154,7 +141,6 @@ fun LocalReadScreen(
         }
     }
 
-    // 1. Load the EPUB File initially
     LaunchedEffect(fileUri) {
         try {
             withContext(Dispatchers.IO) {
@@ -173,7 +159,6 @@ fun LocalReadScreen(
         }
     }
 
-    // 2. Extract and render the current chapter HTML
     LaunchedEffect(epubBook, currentChapterIndex) {
         val book = epubBook ?: return@LaunchedEffect
         try {
@@ -183,7 +168,6 @@ fun LocalReadScreen(
             val doc = Jsoup.parse(rawHtml)
             val chapterHref = resource.href
 
-            // --- LIGHTWEIGHT IMAGE INTERCEPTION PREP ---
             val images = doc.select("img, image")
             for (img in images) {
                 var src = img.attr("src").ifEmpty { img.attr("xlink:href") }
@@ -200,7 +184,6 @@ fun LocalReadScreen(
                     resolvedHref = "$chapterDir/$src"
                 }
 
-                // Encode the path safely and rewrite the tag to trigger our interceptor
                 val safeHref = java.net.URLEncoder.encode(resolvedHref, "UTF-8")
                 img.attr("src", "local://$safeHref")
             }
@@ -244,165 +227,48 @@ fun LocalReadScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        var ticks = 0
-        while (isActive) {
-            currentTime = LocalTime.now(ZoneId.of("Asia/Jerusalem")).format(DateTimeFormatter.ofPattern("HH:mm"))
-            if (ticks % 60 == 0) {
-                val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-                val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-                val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-                val isCharging = intent?.getIntExtra(
-                    BatteryManager.EXTRA_STATUS,
-                    -1
-                ) in listOf(BatteryManager.BATTERY_STATUS_CHARGING, BatteryManager.BATTERY_STATUS_FULL)
-                val pct = if (scale > 0) (level * 100) / scale else 0
-                batteryStatus = if (isCharging) "⚡$pct%" else "🔋$pct%"
-            }
-            ticks++; delay(1000)
-        }
-    }
+    // --- USE SHARED TOOL DIALOG ---
+    SmartToolDialog(
+        title = toolDialogTitle,
+        content = toolDialogContent,
+        isLoading = isLoadingTool,
+        onDismiss = { toolDialogTitle = "" }
+    )
 
-    if (toolDialogTitle.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { toolDialogTitle = "" },
-            title = {
-                Text(
-                    toolDialogTitle,
-                    color = Color(0xFF4dd0e1),
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif
-                )
-            },
-            text = {
-                if (isLoadingTool) CircularProgressIndicator(color = Color(0xFF4dd0e1)) else Text(
-                    toolDialogContent,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontFamily = FontFamily.Serif
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { toolDialogTitle = "" }) {
-                    Text("Close", color = Color(0xFF4dd0e1))
-                }
-            },
-            containerColor = Color(0xFF2b2b2b)
-        )
-    }
-
+    // --- USE SHARED SETTINGS DIALOG ---
     if (showSettingsDialog) {
-        AlertDialog(
-            onDismissRequest = { showSettingsDialog = false },
-            title = {
-                Text("Reading Settings", color = Color(0xFF4dd0e1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif)
+        ReaderSettingsDialog(
+            fontSize = fontSize,
+            onFontSizeChange = {
+                fontSize = it
+                sharedPrefs.edit().putInt("font_size", it).apply()
             },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // --- Font Size ---
-                    Column {
-                        Text("Font Size: ${fontSize}px", color = Color.White)
-                        Slider(
-                            value = fontSize.toFloat(),
-                            onValueChange = {
-                                fontSize = it.toInt()
-                                sharedPrefs.edit().putInt("font_size", fontSize).apply()
-                            },
-                            valueRange = 12f..36f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFF4dd0e1), activeTrackColor = Color(0xFF4dd0e1))
-                        )
-                    }
-                    // --- Line Spacing ---
-                    Column {
-                        Text("Line Spacing: ${lineSpacing}x", color = Color.White)
-                        Slider(
-                            value = lineSpacing,
-                            onValueChange = {
-                                lineSpacing = (Math.round(it * 10) / 10.0).toFloat()
-                                sharedPrefs.edit().putFloat("line_spacing", lineSpacing).apply()
-                            },
-                            valueRange = 1.0f..2.5f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFF4dd0e1), activeTrackColor = Color(0xFF4dd0e1))
-                        )
-                    }
-                    // --- Font Selection ---
-                    Column {
-                        Text("Font", color = Color.White, modifier = Modifier.padding(bottom = 8.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                        ) {
-                            listOf(
-                                "Serif", "Sans-Serif", "Monospace",
-                                "Alegreya", "Arial", "Arimo", "Georgia",
-                                "Libre Baskerville", "Merriweather", "Times New Roman",
-                                "Frank Ruhl Libre", "Heebo", "Rubik"
-                            ).forEach { fontOption ->
-                                Button(
-                                    onClick = {
-                                        selectedFont = fontOption
-                                        sharedPrefs.edit().putString("font", selectedFont).apply()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (selectedFont == fontOption) Color(0xFF4dd0e1) else Color(0xFF444444),
-                                        contentColor = if (selectedFont == fontOption) Color.Black else Color.White
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                ) {
-                                    Text(fontOption, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                    // --- Theme Selection ---
-                    Column {
-                        Text("Theme", color = Color.White, modifier = Modifier.padding(bottom = 8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            listOf("Dark", "Light", "Sepia").forEach { themeOption ->
-                                Button(
-                                    onClick = {
-                                        theme = themeOption
-                                        sharedPrefs.edit().putString("theme", theme).apply()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (theme == themeOption) Color(0xFF4dd0e1) else Color(0xFF444444),
-                                        contentColor = if (theme == themeOption) Color.Black else Color.White
-                                    ),
-                                    modifier = Modifier.weight(1f),
-                                    contentPadding = PaddingValues(0.dp)
-                                ) {
-                                    Text(themeOption, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                    // --- Volume Paging Toggle ---
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Volume Button Paging", color = Color.White)
-                        Switch(
-                            checked = volumePagingEnabled,
-                            onCheckedChange = {
-                                volumePagingEnabled = it
-                                sharedPrefs.edit().putBoolean("volume_paging", volumePagingEnabled).apply()
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color(0xFF4dd0e1),
-                                uncheckedThumbColor = Color.Gray,
-                                uncheckedTrackColor = Color(0xFF444444)
-                            )
-                        )
-                    }
-                }
+            lineSpacing = lineSpacing,
+            onLineSpacingChange = {
+                lineSpacing = it
+                sharedPrefs.edit().putFloat("line_spacing", it).apply()
             },
-            confirmButton = {
-                TextButton(onClick = { showSettingsDialog = false }) { Text("Close", color = Color(0xFF4dd0e1)) }
+            selectedFont = selectedFont,
+            onFontChange = {
+                selectedFont = it
+                sharedPrefs.edit().putString("font", it).apply()
             },
-            containerColor = Color(0xFF2b2b2b)
+            theme = theme,
+            onThemeChange = {
+                theme = it
+                sharedPrefs.edit().putString("theme", it).apply()
+            },
+            volumePagingEnabled = volumePagingEnabled,
+            onVolumePagingChange = {
+                volumePagingEnabled = it
+                sharedPrefs.edit().putBoolean("volume_paging", it).apply()
+            },
+            swipeToChangeChaptersEnabled = swipeToChangeChaptersEnabled,
+            onSwipeToChangeChaptersChange = {
+                swipeToChangeChaptersEnabled = it
+                sharedPrefs.edit().putBoolean("swipe_to_change_chapters", it).apply()
+            },
+            onDismiss = { showSettingsDialog = false }
         )
     }
 
@@ -421,7 +287,12 @@ fun LocalReadScreen(
                 androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.height(300.dp)) {
                     items(totalChapters) { index ->
                         TextButton(
-                            onClick = { currentChapterIndex = index; showChapterDialog = false },
+                            onClick = { 
+                                currentChapterIndex = index
+                                // LocalReadScreen doesn't seem to have currentScrollPercent or isJumping state
+                                // but if it did, we would reset it here.
+                                showChapterDialog = false 
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
@@ -442,29 +313,78 @@ fun LocalReadScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                modifier = Modifier.displayCutoutPadding(),
-                title = {
-                    Text(
-                        chapterTitle.ifEmpty { "Chapter ${currentChapterIndex + 1}" },
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    TextButton(onClick = onNavigateBack) {
+            if (isSearching) {
+                TopAppBar(
+                    modifier = Modifier.displayCutoutPadding(),
+                    title = {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                webViewRef?.findAllAsync(it)
+                            },
+                            placeholder = { Text("Search...", color = Color.Gray) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            isSearching = false
+                            searchQuery = ""
+                            webViewRef?.clearMatches()
+                        }) {
+                            Text("✕", color = Color.White, fontSize = 20.sp)
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { webViewRef?.findNext(false) }) {
+                            Text("▲", color = Color.White, fontSize = 20.sp)
+                        }
+                        IconButton(onClick = { webViewRef?.findNext(true) }) {
+                            Text("▼", color = Color.White, fontSize = 20.sp)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E))
+                )
+            } else {
+                TopAppBar(
+                    modifier = Modifier.displayCutoutPadding(),
+                    title = {
                         Text(
-                            "◀ Back",
-                            color = Color(0xFF4dd0e1),
+                            chapterTitle.ifEmpty { "Chapter ${currentChapterIndex + 1}" },
                             fontWeight = FontWeight.Bold
                         )
-                    }
-                },
-                actions = { IconButton(onClick = { showSettingsDialog = true }) { Text("⚙️", fontSize = 20.sp) } },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1E1E1E),
-                    titleContentColor = Color.White
+                    },
+                    navigationIcon = {
+                        TextButton(onClick = onNavigateBack) {
+                            Text(
+                                "◀ Back",
+                                color = Color(0xFF4dd0e1),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { isSearching = true }) { Text("🔍", fontSize = 20.sp) }
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Text("⚙️", fontSize = 20.sp)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color(0xFF1E1E1E),
+                        titleContentColor = Color.White
+                    )
                 )
-            )
+            }
         },
         bottomBar = {
             Surface(color = Color(0xFF1E1E1E), contentColor = Color.White, modifier = Modifier.fillMaxWidth()) {
@@ -480,7 +400,11 @@ fun LocalReadScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = { if (currentChapterIndex > 0) currentChapterIndex-- },
+                            onClick = { 
+                                if (currentChapterIndex > 0) {
+                                    currentChapterIndex--
+                                }
+                            },
                             enabled = currentChapterIndex > 0,
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF442694))
                         ) { Text("◀ Prev") }
@@ -495,7 +419,11 @@ fun LocalReadScreen(
                             )
                         }
                         Button(
-                            onClick = { if (currentChapterIndex < totalChapters - 1) currentChapterIndex++ },
+                            onClick = { 
+                                if (currentChapterIndex < totalChapters - 1) {
+                                    currentChapterIndex++
+                                }
+                            },
                             enabled = currentChapterIndex < totalChapters - 1,
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF442694))
                         ) { Text("Next ▶") }
@@ -520,6 +448,7 @@ fun LocalReadScreen(
                 AndroidView(
                     factory = { ctx ->
                         SmartWebView(ctx).apply {
+                            webViewRef = this
                             settings.javaScriptEnabled = true
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
@@ -553,16 +482,12 @@ fun LocalReadScreen(
                             }
 
                             webViewClient = object : android.webkit.WebViewClient() {
-
-                                // --- DOWNSAMPLING IMAGE INTERCEPTOR ---
-                                // --- COMBINED IMAGE & FONT INTERCEPTOR ---
                                 override fun shouldInterceptRequest(
                                     view: WebView?,
                                     request: android.webkit.WebResourceRequest?
                                 ): android.webkit.WebResourceResponse? {
                                     val url = request?.url?.toString() ?: return null
 
-                                    // 1. Intercept Fonts
                                     if (url.startsWith("https://appassets.local/fonts/")) {
                                         val fontFileName = url.substringAfterLast("/")
                                         val cleanFileName = java.net.URLDecoder.decode(fontFileName, "UTF-8")
@@ -576,7 +501,6 @@ fun LocalReadScreen(
                                         }
                                     }
 
-                                    // 2. Intercept Local EPUB Images
                                     if (url.startsWith("local://")) {
                                         val encodedPath = url.replace("local://", "")
                                         val imagePath = java.net.URLDecoder.decode(encodedPath, "UTF-8")
@@ -643,12 +567,16 @@ fun LocalReadScreen(
                                         if (e1 == null) return false
                                         val diffX = e2.x - e1.x
                                         val diffY = e2.y - e1.y
-                                        if (Math.abs(diffX) > Math.abs(diffY)) {
+                                        if (swipeToChangeChaptersEnabled && Math.abs(diffX) > Math.abs(diffY)) {
                                             if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
                                                 if (diffX > 0) {
-                                                    if (currentChapterIndex > 0) currentChapterIndex--
+                                                    if (currentChapterIndex > 0) {
+                                                        currentChapterIndex--
+                                                    }
                                                 } else {
-                                                    if (currentChapterIndex < totalChapters - 1) currentChapterIndex++
+                                                    if (currentChapterIndex < totalChapters - 1) {
+                                                        currentChapterIndex++
+                                                    }
                                                 }
                                                 return true
                                             }
@@ -683,19 +611,17 @@ fun LocalReadScreen(
                             if (volumePagingEnabled && event.action == android.view.KeyEvent.ACTION_DOWN) {
                                 when (keyCode) {
                                     android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                                        // Volume Down = Next Chapter
                                         if (currentChapterIndex < totalChapters - 1) currentChapterIndex++
-                                        true // 'true' consumes the event so media volume doesn't change
+                                        true
                                     }
                                     android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
-                                        // Volume Up = Previous Chapter
                                         if (currentChapterIndex > 0) currentChapterIndex--
                                         true
                                     }
                                     else -> false
                                 }
                             } else {
-                                false // If toggle is off, let the phone change the actual media volume
+                                false
                             }
                         }
                     },

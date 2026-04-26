@@ -68,6 +68,7 @@ data class HighlightItem(
     val highlighted_text: String,
     val note: String?,
     val color: String?,
+    val scroll_percentage: Float,
     val created_at: String
 )
 
@@ -76,7 +77,8 @@ data class HighlightRequest(
     val chapter_index: Int,
     val highlighted_text: String,
     val note: String? = null,
-    val color: String
+    val color: String,
+    val scroll_percentage: Float
 )
 @Keep
 data class LastReadInfo(

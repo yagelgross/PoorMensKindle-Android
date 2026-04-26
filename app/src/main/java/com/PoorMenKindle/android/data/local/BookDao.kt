@@ -36,4 +36,7 @@ interface BookDao {
 
     @Query("DELETE FROM local_highlights WHERE localId = :id")
     suspend fun deleteHighlight(id: Int)
+
+    @Query("UPDATE local_highlights SET note = :note WHERE localId = :id")
+    suspend fun updateHighlightNote(id: Int, note: String?)
 }

@@ -352,7 +352,12 @@ fun AdminScreen(
                         }
                     }
                     1 -> {
-                        val filteredBooks = books.filter { it.title.contains(searchQuery, ignoreCase = true) }
+                        val filteredBooks = books.filter {
+                            it.title.contains(searchQuery, ignoreCase = true) ||
+                                    it.author.contains(searchQuery, ignoreCase = true) ||
+                                    (it.series_name?.contains(searchQuery, ignoreCase = true) == true)
+                        }
+
                         items(filteredBooks) { book ->
                             AdminBookCard(book, coroutineScope, onRefresh = { loadData() })
                         }

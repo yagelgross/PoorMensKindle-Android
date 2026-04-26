@@ -10,15 +10,10 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 object NetworkManager {
-    private const val BASE_URL = "https://100.99.101.1:8000"
+    const val BASE_URL = "https://dietpi.tailfa471e.ts.net"
 
     var jwtToken: String? = null
     var isAdmin: Boolean = false
@@ -63,46 +58,29 @@ object NetworkManager {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
-    private val unsafeOkHttpClient: OkHttpClient by lazy {
-        try {
-            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-            })
+    // Clean, secure, standard OkHttpClient. No more unsafe trust managers!
+    private val okHttpClient: OkHttpClient by lazy {
+        val cacheSize = (50 * 1024 * 1024).toLong()
+        val myCache = appContext?.let { Cache(File(it.cacheDir, "book_cache"), cacheSize) }
 
-            val sslContext = SSLContext.getInstance("SSL")
-            sslContext.init(null, trustAllCerts, SecureRandom())
-            val sslSocketFactory = sslContext.socketFactory
-
-            val cacheSize = (50 * 1024 * 1024).toLong()
-            val myCache = appContext?.let { Cache(File(it.cacheDir, "book_cache"), cacheSize) }
-
-            OkHttpClient.Builder()
-                .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
-                .hostnameVerifier { _, _ -> true }
-                .cache(myCache)
-                .addInterceptor(authInterceptor)
-                .addInterceptor(cacheInterceptor)
-                .addInterceptor(loggingInterceptor)
-                .connectTimeout(60, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .build()
-        } catch (e: Exception) {
-            throw RuntimeException(e)
-        }
+        OkHttpClient.Builder()
+            .cache(myCache)
+            .addInterceptor(authInterceptor)
+            .addInterceptor(cacheInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
     }
 
-    // The Retrofit instance
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
-            .client(unsafeOkHttpClient)
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
 
-    // The actual API service you will call from your UI
     val api: ApiService by lazy {
         retrofit.create(ApiService::class.java)
     }
@@ -112,7 +90,6 @@ object NetworkManager {
         isAdmin = false
     }
 
-    // Helper function to check if the phone actually has internet
     private fun hasNetwork(context: Context?): Boolean {
         if (context == null) return false
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

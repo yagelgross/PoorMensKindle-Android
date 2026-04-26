@@ -22,9 +22,9 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Request : Screen("request")
     // בתוך sealed class Screen
-    object Read : Screen("read/{bookId}/{totalChapters}/{savedChapter}/{scrollProgress}") {
-        fun createRoute(bookId: Int, totalChapters: Int, savedChapter: Int, scrollProgress: Float) =
-            "read/$bookId/$totalChapters/$savedChapter/$scrollProgress"
+    object Read : Screen("read/{bookId}/{totalChapters}/{savedChapter}/{scrollProgress}/{returnChapter}/{returnScroll}") {
+        fun createRoute(bookId: Int, totalChapters: Int, savedChapter: Int, scrollProgress: Float, returnChapter: Int = -1, returnScroll: Float = -1f) =
+            "read/$bookId/$totalChapters/$savedChapter/$scrollProgress/$returnChapter/$returnScroll"
     }
 
     object RequestNew : Screen("request_new")
@@ -106,19 +106,33 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                 bookId = bookId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToRead = { id, totalChapters, currentChapter, currentScroll  ->
-                    navController.navigate("read/$id/$totalChapters/$currentChapter/$currentScroll")
+                    navController.navigate(Screen.Read.createRoute(id, totalChapters, currentChapter, currentScroll))
                 }
             )
         }
 
         composable(
-            route = "highlights/{bookId}",
-            arguments = listOf(androidx.navigation.navArgument("bookId") { type = androidx.navigation.NavType.IntType })
+            route = "highlights/{bookId}/{returnChapter}/{returnScroll}",
+            arguments = listOf(
+                androidx.navigation.navArgument("bookId") { type = androidx.navigation.NavType.IntType },
+                androidx.navigation.navArgument("returnChapter") { type = androidx.navigation.NavType.IntType },
+                androidx.navigation.navArgument("returnScroll") { type = androidx.navigation.NavType.FloatType }
+            )
         ) { backStackEntry ->
             val bookId = backStackEntry.arguments?.getInt("bookId") ?: 0
+            val returnChapter = backStackEntry.arguments?.getInt("returnChapter") ?: -1
+            val returnScroll = backStackEntry.arguments?.getFloat("returnScroll") ?: -1f
+
             com.PoorMenKindle.android.ui.screens.HighlightsScreen(
                 bookId = bookId,
-                onNavigateBack = { navController.popBackStack() }
+                returnChapter = returnChapter,
+                returnScroll = returnScroll,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToRead = { id, totalChapters, currentChapter, currentScroll, retCh, retScroll ->
+                    navController.navigate("read/$id/$totalChapters/$currentChapter/$currentScroll/$retCh/$retScroll") {
+                        popUpTo("highlights/{bookId}/{returnChapter}/{returnScroll}") { inclusive = true }
+                    }
+                }
             )
         }
 
@@ -145,21 +159,33 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                 navArgument("bookId") { type = NavType.IntType },
                 navArgument("totalChapters") { type = NavType.IntType },
                 navArgument("savedChapter") { type = NavType.IntType },
-                navArgument("scrollProgress") { type = NavType.FloatType }
+                navArgument("scrollProgress") { type = NavType.FloatType },
+                navArgument("returnChapter") { type = NavType.IntType },
+                navArgument("returnScroll") { type = NavType.FloatType }
             )
         ) { backStackEntry ->
             val bookId = backStackEntry.arguments?.getInt("bookId") ?: 0
             val totalChapters = backStackEntry.arguments?.getInt("totalChapters") ?: 0
             val savedChapter = backStackEntry.arguments?.getInt("savedChapter") ?: 0
             val scrollProgress = backStackEntry.arguments?.getFloat("scrollProgress") ?: 0f
+            val returnChapter = backStackEntry.arguments?.getInt("returnChapter") ?: -1
+            val returnScroll = backStackEntry.arguments?.getFloat("returnScroll") ?: -1f
 
             ReadScreen(
                 bookId = bookId,
                 totalChapters = totalChapters,
                 initialChapter = savedChapter,
                 initialScrollProgress = scrollProgress,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToHighlights = { id -> navController.navigate("highlights/$id") }
+                returnChapterArg = returnChapter,
+                returnScrollArg = returnScroll,
+                onNavigateBack = { 
+                    navController.navigate(Screen.Request.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onNavigateToHighlights = { id, curCh, curScroll -> 
+                    navController.navigate("highlights/$id/$curCh/$curScroll") 
+                }
             )
         }
 

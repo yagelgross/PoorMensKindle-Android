@@ -18,7 +18,9 @@ data class LocalHighlight(
     val bookId: Int,
     val chapterIndex: Int,
     val highlightedText: String,
-    val color: String
+    val color: String,
+    val note: String? = null,
+    val scrollPercentage: Float = 0f
 )
 
 @Entity(tableName = "downloaded_chapters")
