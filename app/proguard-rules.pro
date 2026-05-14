@@ -18,7 +18,13 @@
 -keep class sun.misc.Unsafe { *; }
 
 # 4. Protect Your API & Models
--keep class com.PoorMenKindle.android.network.** { *; }
+-keep class com.poorMenKindle.android.network.** { *; }
 
 # 5. Ignore the EPUB XML Warning
 -dontwarn org.xmlpull.v1.**
+
+# 6. Keep Room generated classes (Fix for AppDatabase_Impl missing)
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Dao class *
+-keep class **_Impl { *; }
+-keep class androidx.room.paging.** { *; }
