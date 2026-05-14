@@ -13,7 +13,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 object NetworkManager {
-    const val BASE_URL = "https://dietpi.tailfa471e.ts.net"
+    const val BASE_URL = ""
 
     var jwtToken: String? = null
     var isAdmin: Boolean = false
