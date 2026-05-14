@@ -81,7 +81,7 @@ app/
 
 ## 🔑 Environment Variables & Config
 
-- `NetworkManager.BASE_URL`: The endpoint for the backend service (currently `https://dietpi.tailfa471e.ts.net`).
+- `NetworkManager.BASE_URL`: The endpoint for the backend service, insert the one your server is running on.
 - `SharedPreferences ("BookWormHolePrefs")`: Stores JWT tokens and user roles for session management.
 
 ## 🧪 Tests
