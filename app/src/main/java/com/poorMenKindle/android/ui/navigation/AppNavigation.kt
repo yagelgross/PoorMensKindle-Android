@@ -18,10 +18,26 @@ import androidx.core.content.edit
 import com.poorMenKindle.android.network.NetworkManager
 import com.poorMenKindle.android.ui.screens.BookDetailScreen
 import android.util.Base64
+import androidx.compose.foundation.clickable
+import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Request : Screen("request")
-    // בתוך sealed class Screen
+    // inside sealed class Screen
     object Read : Screen("read/{bookId}/{totalChapters}/{savedChapter}/{scrollProgress}/{returnChapter}/{returnScroll}") {
         fun createRoute(bookId: Int, totalChapters: Int, savedChapter: Int, scrollProgress: Float, returnChapter: Int = -1, returnScroll: Float = -1f) =
             "read/$bookId/$totalChapters/$savedChapter/$scrollProgress/$returnChapter/$returnScroll"
@@ -81,6 +97,102 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
             )
         }
 
+        // In your NavHost, add this alongside your other routes:
+        composable("app_license") {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "MIT License",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    // Use a scrollable text area or just standard Text if it fits
+                    Text(
+                        text = """
+                    Copyright (c) 2026 Yagel Gross
+
+                    Permission is hereby granted, free of charge, to any person obtaining a copy
+                    of this software and associated documentation files (the "Software"), to deal
+                    in the Software without restriction, including without limitation the rights
+                    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                    copies of the Software, and to permit persons to whom the Software is
+                    furnished to do so, subject to the following conditions:
+
+                    The above copyright notice and this permission notice shall be included in all
+                    copies or substantial portions of the Software.
+
+                    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+                    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+                    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+                    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+                    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+                    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+                    SOFTWARE.
+                """.trimIndent(),
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+
+        composable("licenses") {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                LibrariesContainer(
+                    modifier = Modifier.fillMaxSize(),
+                    header = {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { navController.navigate("app_license") }
+                                    .padding(horizontal = 24.dp, vertical = 32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Poor Men's Kindle",
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF1E3A8A) // Matching your LibraryScreen theme
+                                )
+
+                                Text(
+                                    text = "Developed solely by Yagel Gross, no Noam included",
+                                    fontSize = 16.sp,
+                                    color = Color.DarkGray,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+
+                                Text(
+                                    text = "Copyright © 2026",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+
+                                Text(
+                                    text = "Licensed under the MIT License",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(top = 12.dp)
+                                )
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(top = 24.dp),
+                                    color = Color.LightGray
+                                )
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
         composable(Screen.Request.route) {
             LibraryScreen(
                 onNavigateToRead = { bookId, totalChapters, savedChapter, scrollProgress ->
@@ -92,9 +204,12 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                 onNavigateToBookDetail = { bookId ->
                     navController.navigate("book_detail/$bookId")
                 },
-                onLogout = performLogout
+                onLogout = performLogout,
+                onNavigateToLicenses = { navController.navigate("licenses") }
             )
         }
+
+
 
         composable(
             route = "book_detail/{bookId}",

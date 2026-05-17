@@ -41,6 +41,7 @@ import androidx.lifecycle.Lifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
+import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 
 @Composable
 fun LibraryScreen(
@@ -49,7 +50,8 @@ fun LibraryScreen(
     onNavigateToAdmin: () -> Unit,
     onNavigateToLocalRead: (String) -> Unit,
     onNavigateToBookDetail: (Int) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToLicenses: () -> Unit
 ) {
     var books by remember { mutableStateOf<List<BookInfo>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -233,6 +235,14 @@ fun LibraryScreen(
                                 menuExpanded = false
                                 NetworkManager.disconnect()
                                 onLogout()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Licenses & About", color = Color(0xFF1F2937)) },
+                            onClick = {
+                                menuExpanded = false
+                                // Create intent to launch the Google OSS Activity
+                                onNavigateToLicenses()
                             }
                         )
                     }

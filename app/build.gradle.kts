@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.0.21-1.0.28"
+    id("com.mikepenz.aboutlibraries.plugin")
 }
 
 android {
@@ -86,4 +87,5 @@ dependencies {
 
     // Satisfies epublib's internal logging requirement without crashing Android
     implementation("org.slf4j:slf4j-nop:1.7.36")
+    implementation("com.mikepenz:aboutlibraries-compose-m3:11.2.3")
 }
