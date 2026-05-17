@@ -43,7 +43,6 @@ fun AdminScreen(
     var searchQuery by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf("") }
 
-    // Data States
     var users by remember { mutableStateOf<List<UserInfo>>(emptyList()) }
     var books by remember { mutableStateOf<List<BookInfo>>(emptyList()) }
     var requests by remember { mutableStateOf<List<RequestItem>>(emptyList()) }
@@ -57,12 +56,10 @@ fun AdminScreen(
     var seriesName by remember { mutableStateOf("") }
     var seriesNumber by remember { mutableStateOf("") }
 
-    // JavaFX Peach-to-Coral Gradient
     val backgroundBrush = Brush.verticalGradient(
         colors = listOf(Color(0xFFfcd6b5), Color(0xFFfc6969))
     )
 
-    // Data Fetching Logic
     fun loadData() {
         statusMessage = "Loading..."
         coroutineScope.launch {
@@ -88,10 +85,8 @@ fun AdminScreen(
         }
     }
 
-    // Fetch data when tab changes
     LaunchedEffect(selectedTabIndex) { loadData() }
 
-    // Reset Password Dialog
     if (showResetPasswordDialog != null) {
         val targetUser = showResetPasswordDialog!!
         var newPassword by remember { mutableStateOf("") }
@@ -155,7 +150,7 @@ fun AdminScreen(
         )
     }
 
-    // Add User Dialog
+    // Add user dialog
     if (showAddUserDialog) {
         var newUsername by remember { mutableStateOf("") }
         var newPassword by remember { mutableStateOf("") }
@@ -194,7 +189,7 @@ fun AdminScreen(
         )
     }
 
-    // Add Book Dialog (Hybrid: Manual Text + EPUB File)
+    // Add book dialog (Manual Text + EPUB File)
     if (showAddBookDialog) {
         var newTitle by remember { mutableStateOf("") }
         var newAuthor by remember { mutableStateOf("") }
@@ -355,7 +350,7 @@ fun AdminScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add User")
                 }
-            } else if (selectedTabIndex == 1) { // --- Add Book Button ---
+                // Add book button
                 FloatingActionButton(
                     onClick = { showAddBookDialog = true },
                     containerColor = Color(0xFF000333),

@@ -44,7 +44,7 @@ fun HighlightsScreen(
         val db = AppDatabase.getDatabase(context)
         val dao = db.bookDao()
 
-        // 1. Initial Local Load
+        // Local Load
         val localBook = withContext(Dispatchers.IO) { dao.getDownloadedBook(bookId) }
         if (localBook != null) totalChapters = localBook.totalChapters
         else {
@@ -62,7 +62,7 @@ fun HighlightsScreen(
             isLoading = false
         }
 
-        // 2. Sync from Server
+        // Sync from Server
         try {
             val response = withContext(Dispatchers.IO) { NetworkManager.api.getHighlights(bookId) }
             if (response.isSuccessful) {
@@ -83,7 +83,7 @@ fun HighlightsScreen(
                                 )
                             )
                         } else if (localMatch.serverHighlightId == null) {
-                            // Link local highlight to server ID
+                            // Link to server ID
                             dao.updateHighlightServerId(localMatch.localId, serverHl.id)
                         }
                     }
@@ -194,7 +194,7 @@ fun HighlightsScreen(
                             Text("📝 ${highlight.note}", color = Color.LightGray, fontStyle = FontStyle.Italic)
                         }
 
-                        // Action Buttons
+                        // Action buttons
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Row {
                                 TextButton(onClick = { editNoteHighlight = highlight }) { Text(if (highlight.note.isNullOrBlank()) "Add Note" else "Edit Note") }

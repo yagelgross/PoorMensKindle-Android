@@ -13,7 +13,8 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 object NetworkManager {
-    const val BASE_URL = ""
+    // Default value for development, override via gradle or local config if needed
+    const val BASE_URL = "http://localhost:8000"
 
     var jwtToken: String? = null
     var isAdmin: Boolean = false
@@ -35,7 +36,7 @@ object NetworkManager {
     private val cacheInterceptor = Interceptor { chain ->
         var request = chain.request()
 
-        // If NO internet, use cached data up to 7 days old
+        // Offline: use cache up to 7 days old
         if (!hasNetwork(appContext)) {
             request = request.newBuilder()
                 .header("Cache-Control", "public, only-if-cached, max-stale=" + 60 * 60 * 24 * 7)
@@ -44,7 +45,7 @@ object NetworkManager {
 
         val response = chain.proceed(request)
 
-        // If YES internet, save data to cache for 1 hour
+        // Online: cache data for 1 hour
         if (hasNetwork(appContext)) {
             response.newBuilder()
                 .header("Cache-Control", "public, max-age=" + 60 * 60)
@@ -58,7 +59,7 @@ object NetworkManager {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
-    // Clean, secure, standard OkHttpClient. No more unsafe trust managers!
+    // Standard OkHttpClient setup
     private val okHttpClient: OkHttpClient by lazy {
         val cacheSize = (50 * 1024 * 1024).toLong()
         val myCache = appContext?.let { Cache(File(it.cacheDir, "book_cache"), cacheSize) }

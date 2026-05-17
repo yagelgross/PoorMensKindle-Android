@@ -7,6 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
 
 @Keep
@@ -102,13 +103,13 @@ interface ApiService {
     @GET("/books/{book_id}")
     suspend fun getBook(@Path("book_id") bookId: Int): Response<BookInfo>
 
-    @POST("highlights/{book_id}")
+    @POST("/highlights/{book_id}")
     suspend fun addHighlight(@Path("book_id") bookId: Int, @Body request: HighlightRequest): Response<Map<String, String>>
 
-    @GET("highlights/{book_id}")
+    @GET("/highlights/{book_id}")
     suspend fun getHighlights(@Path("book_id") bookId: Int): Response<List<HighlightItem>>
 
-    @DELETE("highlights/{highlight_id}")
+    @DELETE("/highlights/{highlight_id}")
     suspend fun deleteHighlight(@Path("highlight_id") highlightId: Int): retrofit2.Response<Map<String, String>>
 
     @GET("/api/translate")
@@ -118,5 +119,12 @@ interface ApiService {
     suspend fun updateRequestStatus(
         @Path("request_id") requestId: Int,
         @Query("new_status") newStatus: String
+    ): Response<Map<String, String>>
+
+    @POST("/logout")
+    suspend fun logout(@Body emptyBody: RequestBody = run {
+        val content = ByteArray(0)
+        content.toRequestBody(null, 0, content.size)
+    }
     ): Response<Map<String, String>>
 }

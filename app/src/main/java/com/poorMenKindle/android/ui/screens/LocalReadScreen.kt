@@ -84,7 +84,7 @@ fun LocalReadScreen(
     var chapterTitle by remember { mutableStateOf("Opening...") }
     var errorMessage by remember { mutableStateOf("") }
 
-    // --- SHARED COMPONENTS IN ACTION ---
+    // Shared components
     val (currentTime, batteryStatus) = rememberBatteryAndTime(context)
 
     var wordCount by remember { mutableIntStateOf(0) }
@@ -226,7 +226,7 @@ fun LocalReadScreen(
         }
     }
 
-    // --- USE SHARED TOOL DIALOG ---
+    // Smart tool dialog
     SmartToolDialog(
         title = toolDialogTitle,
         content = toolDialogContent,
@@ -234,7 +234,7 @@ fun LocalReadScreen(
         onDismiss = { toolDialogTitle = "" }
     )
 
-    // --- USE SHARED SETTINGS DIALOG ---
+    // Settings dialog
     if (showSettingsDialog) {
         ReaderSettingsDialog(
             fontSize = fontSize,
@@ -288,8 +288,7 @@ fun LocalReadScreen(
                         TextButton(
                             onClick = { 
                                 currentChapterIndex = index
-                                // LocalReadScreen doesn't seem to have currentScrollPercent or isJumping state
-                                // but if it did, we would reset it here.
+                                // LocalReadScreen doesn't seem to have scroll percent or jumping state
                                 showChapterDialog = false 
                             },
                             modifier = Modifier.fillMaxWidth()

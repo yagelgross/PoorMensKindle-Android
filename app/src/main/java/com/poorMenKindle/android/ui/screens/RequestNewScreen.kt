@@ -47,7 +47,7 @@ fun RequestNewScreen(
     var selectedBook by remember { mutableStateOf<OpenLibraryBook?>(null) }
     var showDialog by remember { mutableStateOf(false) }
 
-    // --- Manual Request States ---
+    // Manual request states
     var showManualDialog by remember { mutableStateOf(false) }
     var manualTitle by remember { mutableStateOf("") }
     var manualAuthor by remember { mutableStateOf("") }
@@ -108,7 +108,7 @@ fun RequestNewScreen(
         )
     }
 
-    // --- NEW: Handle Manual Request Dialog ---
+    // Manual request dialog
     if (showManualDialog) {
         AlertDialog(
             shape = RoundedCornerShape(16.dp),
@@ -201,7 +201,7 @@ fun RequestNewScreen(
     ) {
         Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
 
-        // --- TOP BAR ---
+    // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -245,7 +245,7 @@ fun RequestNewScreen(
             }
         }
 
-        // --- SEARCH BAR ---
+    // Search bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -306,7 +306,7 @@ fun RequestNewScreen(
             }
         }
 
-        // --- NEW: Manual Entry Button ---
+    // Manual entry button
         TextButton(
             onClick = { showManualDialog = true },
             modifier = Modifier.padding(bottom = 8.dp)
@@ -326,7 +326,7 @@ fun RequestNewScreen(
             )
         }
 
-        // --- RESULTS GRID ---
+    // Results grid
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 110.dp),
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp, top = 8.dp),
@@ -342,7 +342,7 @@ fun RequestNewScreen(
             }
         }
 
-        // --- BOTTOM BAR ---
+    // Bottom bar
         Button(
             onClick = onNavigateBack,
             colors = ButtonDefaults.buttonColors(

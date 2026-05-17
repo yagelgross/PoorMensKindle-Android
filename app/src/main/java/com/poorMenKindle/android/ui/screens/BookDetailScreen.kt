@@ -88,7 +88,7 @@ fun BookDetailScreen(
                         cover_image = null,
                         summary = localBook.summary
                     )
-                    isLoading = false // Data found locally, show it immediately
+                    isLoading = false // Loaded locally, show immediately
                 }
 
                 try {
@@ -110,7 +110,7 @@ fun BookDetailScreen(
                             else -> "An error occurred: ${e.message}"
                         }
                     }
-                    // If it's downloaded, we just ignore the network error and stay with local data
+                    // Ignore network error if already downloaded
                 }
             } finally {
                 if (!isDownloadedLocally || isError) {
@@ -159,7 +159,7 @@ fun BookDetailScreen(
                 val isHebrew = isTextHebrew(b.title) || isTextHebrew(b.summary)
                 val layoutDir = if (isHebrew) LayoutDirection.Rtl else LayoutDirection.Ltr
 
-                // 2. Force RTL or LTR specifically for this screen's content
+                // Set layout direction based on content language
                 CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
                     Column(
                         modifier = Modifier
@@ -328,7 +328,7 @@ fun BookDetailScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // --- SUMMARY BOX ---
+                        // Summary Box
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -353,7 +353,7 @@ fun BookDetailScreen(
                                     fontSize = 15.sp,
                                     color = Color.DarkGray,
                                     lineHeight = 22.sp,
-                                    // Use Justify for English to look like a book, but Start for Hebrew for clean RTL edges
+                                    // Text alignment based on language
                                     textAlign = if (isHebrew) TextAlign.Start else TextAlign.Justify
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))

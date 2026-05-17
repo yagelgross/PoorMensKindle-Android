@@ -23,7 +23,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// --- 1. CSS Font Generator ---
+// CSS Font Generator
 fun getAllFontsCss(): String {
     val basePath = "https://appassets.local/fonts/"
     return """
@@ -40,7 +40,7 @@ fun getAllFontsCss(): String {
     """.trimIndent()
 }
 
-// --- 2. Battery & Time Background Poller ---
+// Battery & Time Background Poller
 @Composable
 fun rememberBatteryAndTime(context: Context): Pair<String, String> {
     var currentTime by remember { mutableStateOf("") }
@@ -68,7 +68,7 @@ fun rememberBatteryAndTime(context: Context): Pair<String, String> {
     return Pair(currentTime, batteryStatus)
 }
 
-// --- 3. Smart Tool Dialog (Dictionary/Translate/Wiki) ---
+// Smart Tool Dialog (Dictionary/Translate/Wiki)
 @Composable
 fun SmartToolDialog(
     title: String,
@@ -105,7 +105,7 @@ fun SmartToolDialog(
     }
 }
 
-// --- 4. Reader Settings Dialog ---
+// Reader Settings Dialog
 @Composable
 fun ReaderSettingsDialog(
     fontSize: Int,

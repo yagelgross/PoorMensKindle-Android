@@ -137,7 +137,7 @@ fun LibraryScreen(
                 if (!showOnlyDownloaded) {
                     statusMessage = "Refreshing..."
                 }
-                // Fetch books and last read in parallel-ish
+    // Fetch books and progress in parallel
                 val booksResponse = withContext(Dispatchers.IO) { NetworkManager.api.getBooks() }
                 val lastReadResponse = withContext(Dispatchers.IO) { NetworkManager.api.getLastRead() }
 
@@ -179,7 +179,7 @@ fun LibraryScreen(
     ) {
         Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
 
-        // --- TOP BAR ---
+    // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -233,7 +233,6 @@ fun LibraryScreen(
                             text = { Text("Log Out", color = Color(0xFFEF4444)) },
                             onClick = {
                                 menuExpanded = false
-                                NetworkManager.disconnect()
                                 onLogout()
                             }
                         )
@@ -241,7 +240,6 @@ fun LibraryScreen(
                             text = { Text("Licenses & About", color = Color(0xFF1F2937)) },
                             onClick = {
                                 menuExpanded = false
-                                // Create intent to launch the Google OSS Activity
                                 onNavigateToLicenses()
                             }
                         )
@@ -250,7 +248,7 @@ fun LibraryScreen(
             }
         }
 
-        // --- CONTINUE READING WIDGET ---
+        // Continue reading widget
         lastRead?.let { readInfo ->
             val isHebrew = remember(readInfo.title) {
                 readInfo.title.any { it in '\u0590'..'\u05FF' }
@@ -331,7 +329,7 @@ fun LibraryScreen(
             }
         }
 
-        // --- SEARCH BAR ---
+        // Search bar
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
@@ -354,7 +352,7 @@ fun LibraryScreen(
             singleLine = true
         )
 
-        // --- CLOUD / OFFLINE FILTER ---
+        // Cloud / Offline filter
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -379,7 +377,7 @@ fun LibraryScreen(
             )
         }
 
-        // --- LIBRARY GALLERY ---
+        // Library gallery
         if (statusMessage.isNotEmpty() && !showOnlyDownloaded) {
             Text(
                 text = statusMessage,
@@ -447,7 +445,7 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
                 .background(Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            // --- COIL REPLACES THE MANUAL FETCHING & CACHING ---
+            // Coil handles image loading
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data("${NetworkManager.BASE_URL}/books/${book.id}/cover")

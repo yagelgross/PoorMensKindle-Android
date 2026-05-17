@@ -28,16 +28,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Request : Screen("request")
-    // inside sealed class Screen
     object Read : Screen("read/{bookId}/{totalChapters}/{savedChapter}/{scrollProgress}/{returnChapter}/{returnScroll}") {
         fun createRoute(bookId: Int, totalChapters: Int, savedChapter: Int, scrollProgress: Float, returnChapter: Int = -1, returnScroll: Float = -1f) =
             "read/$bookId/$totalChapters/$savedChapter/$scrollProgress/$returnChapter/$returnScroll"
@@ -62,26 +65,38 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
-    // Define a reusable logout function
-    val performLogout = {
-        try {
-            // Clear the saved token from device storage
-            context.getSharedPreferences("BookWormHolePrefs", Context.MODE_PRIVATE).edit {
-                clear()
-            }
-            NetworkManager.jwtToken = null
-            NetworkManager.isAdmin = false
-            NetworkManager.disconnect()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+    val coroutineScope = rememberCoroutineScope()
 
-        try {
-            navController.navigate(Screen.Login.route) {
-                popUpTo(0)
+    val performLogout: () -> Unit = {
+        // Start the background thread
+        coroutineScope.launch(Dispatchers.IO) {
+
+            // Tell the server to kill the token FIRST
+            try {
+                NetworkManager.api.logout()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+            // Switch back to the Main UI thread to clear data
+            withContext(Dispatchers.Main) {
+                try {
+                    // Clear local storage
+                    context.getSharedPreferences("BookWormHolePrefs", Context.MODE_PRIVATE).edit {
+                        clear()
+                    }
+                    NetworkManager.jwtToken = null
+                    NetworkManager.isAdmin = false
+                    NetworkManager.disconnect()
+
+                    // Navigate back to the login screen
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -97,7 +112,6 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
             )
         }
 
-        // In your NavHost, add this alongside your other routes:
         composable("app_license") {
             Surface(modifier = Modifier.fillMaxSize()) {
                 Column(
@@ -111,7 +125,7 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-                    // Use a scrollable text area or just standard Text if it fits
+                    // App license content
                     Text(
                         text = """
                     Copyright (c) 2026 Yagel Gross
@@ -157,7 +171,7 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                                     text = "Poor Men's Kindle",
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF1E3A8A) // Matching your LibraryScreen theme
+                                    color = Color(0xFF1E3A8A)
                                 )
 
                                 Text(

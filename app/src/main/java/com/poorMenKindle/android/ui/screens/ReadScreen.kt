@@ -113,7 +113,7 @@ fun ReadScreen(
     var activeMatchOrdinal by remember { mutableIntStateOf(0) }
     var numberOfMatches by remember { mutableIntStateOf(0) }
 
-    // --- Return to Previous Position ---
+    // Back position handling
     var returnPosition by remember { 
         mutableStateOf<Pair<Int, Float>?>(
             if (returnChapterArg != -1) returnChapterArg to returnScrollArg else null
@@ -133,7 +133,7 @@ fun ReadScreen(
         }
     }
 
-    // --- SHARED COMPONENTS IN ACTION ---
+    // Shared components
     val (currentTime, batteryStatus) = rememberBatteryAndTime(context)
 
     // Load Local First + Sync from Server
@@ -142,7 +142,7 @@ fun ReadScreen(
         val db = com.poorMenKindle.android.data.local.AppDatabase.getDatabase(context)
         val dao = db.bookDao()
 
-        // 1. Initial Local Load
+        // Local Load
         val localHls = withContext(Dispatchers.IO) { dao.getHighlightsForBook(bookId) }
         val localConverted = localHls.map {
             HighlightItem(it.serverHighlightId ?: -it.localId, it.chapterIndex, it.highlightedText, it.note, it.color, it.scrollPercentage, "")
@@ -152,7 +152,7 @@ fun ReadScreen(
             highlightsFetched = true
         }
 
-        // 2. Sync from Server
+        // Sync from Server
         try {
             val response = withContext(Dispatchers.IO) { NetworkManager.api.getHighlights(bookId) }
             if (response.isSuccessful) {
@@ -185,7 +185,7 @@ fun ReadScreen(
             }
         } catch (e: Exception) { }
 
-        // 3. Fetch TOC
+        // Fetch TOC
         coroutineScope.launch {
             // First try local DAO
             val localToc = withContext(Dispatchers.IO) { dao.getTocForBook(bookId) }
@@ -286,7 +286,7 @@ fun ReadScreen(
         }
     }
 
-    // --- USE SHARED TOOL DIALOG ---
+    // Smart tool dialog
     SmartToolDialog(
         title = toolDialogTitle,
         content = toolDialogContent,
@@ -298,7 +298,7 @@ fun ReadScreen(
     var pendingHighlightColor by remember { mutableStateOf("") }
     var showNoteDialog by remember { mutableStateOf(false) }
 
-    // 1. Color Picker Dialog
+    // Highlight color picker
     if (showColorPicker) {
         AlertDialog(
             onDismissRequest = { showColorPicker = false },
@@ -329,7 +329,7 @@ fun ReadScreen(
         )
     }
 
-    // 2. Note Dialog
+    // Note dialog
     if (showNoteDialog) {
         var noteText by remember { mutableStateOf("") }
 
@@ -533,7 +533,7 @@ fun ReadScreen(
         }
     }
 
-    // --- USE SHARED SETTINGS DIALOG ---
+    // Settings dialog
     if (showSettingsDialog) {
         ReaderSettingsDialog(
             fontSize = fontSize,

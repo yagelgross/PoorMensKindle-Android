@@ -14,23 +14,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         NetworkManager.init(applicationContext)
 
-        // 1. Check for saved session data
+        // Check session data
         val sharedPrefs = getSharedPreferences("BookWormHolePrefs", MODE_PRIVATE)
         val savedToken = sharedPrefs.getString("jwt_token", null)
         val savedIsAdmin = sharedPrefs.getBoolean("is_admin", false)
 
-        // 2. Determine the starting screen
+        // Start screen logic
         val startScreen = if (savedToken != null) {
             NetworkManager.jwtToken = savedToken
             NetworkManager.isAdmin = savedIsAdmin
-            "request" // Skip login!
+            "request" // Skip login
         } else {
             "login"
         }
 
         setContent {
             PoorMensKindleTheme {
-                // Pass the dynamic start destination to your NavHost
+                // Start app navigation
                 BookWormHoleApp(startDestination = startScreen)
             }
         }

@@ -29,16 +29,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 @Composable
 fun LoginScreen(onNavigateToRequest: () -> Unit) {
     val context = LocalContext.current
-    // State variables (replacing your JavaFX text fields and boolean flags)
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
     var loginInProgress by remember { mutableStateOf(false) }
 
-    // Coroutine scope for network calls (replaces new Thread(() -> {...}).start())
     val coroutineScope = rememberCoroutineScope()
 
-    // 1. OUTER BACKGROUND – cyan-to-light-blue gradient
     val backgroundBrush = Brush.verticalGradient(
         colors = listOf(
             Color(0xFF99e2ff),
@@ -54,7 +51,6 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
             .background(backgroundBrush),
         contentAlignment = Alignment.Center
     ) {
-        // 2. FROSTED-GLASS CARD
         Box(
             modifier = Modifier
                 .width(380.dp)
@@ -69,11 +65,10 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                // --- ANIMATED TITLE ---
                 val infiniteTransition = rememberInfiniteTransition(label = "pulse")
                 val scale by infiniteTransition.animateFloat(
                     initialValue = 1.0f,
-                    targetValue = 1.08f, // Pulses 8% larger
+                    targetValue = 1.08f, // Pulse animation
                     animationSpec = infiniteRepeatable(
                         animation = tween(1500, easing = FastOutSlowInEasing),
                         repeatMode = RepeatMode.Reverse
@@ -82,7 +77,7 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                 )
 
                 Text(
-                    text = "⟡ BookWormHole ⟡",
+                    text = "✦ Poor Men's Kindle ✦",
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFc9a84c),
@@ -103,7 +98,6 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 4. INPUT FIELDS
                 val textFieldColors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.White.copy(alpha = 0.65f),
                     unfocusedContainerColor = Color.White.copy(alpha = 0.45f),
@@ -134,7 +128,6 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                     singleLine = true
                 )
 
-                // 5. ERROR LABEL
                 if (errorMessage.isNotEmpty()) {
                     Text(
                         text = errorMessage,
@@ -147,7 +140,6 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                     Spacer(modifier = Modifier.height(20.dp))
                 }
 
-                // 6. LOGIN BUTTON
                 Button(
                     onClick = {
                         if (username.isEmpty() || password.isEmpty()) {

@@ -1,15 +1,32 @@
+# Build artifacts
+**/build/
+*.apk
+*.aar
+*.ap_
+*.der
+*.ext
+
+# Android Studio / IntelliJ
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.gradle/
 local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+cmake-build-*/
+
+# Gradle
+.gradle/
+build/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Sensitive info
+secrets.properties
+google-services.json

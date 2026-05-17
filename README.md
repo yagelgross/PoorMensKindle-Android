@@ -8,20 +8,22 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 - **Offline Reading**: Support for reading local EPUB files.
 - **Advanced Reader**: Customizable reading experience with scroll progress tracking.
 - **Highlights**: Save and manage highlights from your books.
-- **Admin Dashboard**: Manage users, books, and requests (for admin users).
-- **Synchronization**: Offline sync manager to keep your reading progress and library up to date.
-- **Multilingual Support**: Supports English and Hebrew.
+- **Admin Dashboard**: Manage users, books, and book requests.
+- **Book Requests**: Users can request new books directly through the app.
+- **Synchronization**: Offline sync manager for reading progress and library data.
+- **Clean Codebase**: Organized structure with a focus on readability and modularity.
 
 ## 🛠 Tech Stack
 
-- **Language**: [Kotlin](https://kotlinlang.org/)
+- **Language**: [Kotlin](https://kotlinlang.org/) (JVM 11)
 - **UI Framework**: [Jetpack Compose](https://developer.android.com/compose)
 - **Networking**: [Retrofit](https://square.github.io/retrofit/) & [OkHttp](https://square.github.io/okhttp/)
 - **Database**: [Room Persistence Library](https://developer.android.com/training/data-storage/room)
 - **Image Loading**: [Coil](https://coil-kt.github.io/coil/)
 - **EPUB Parsing**: [epublib](https://github.com/psiegman/epublib)
 - **HTML Parsing**: [JSoup](https://jsoup.org/)
-- **Architecture**: MVVM (implied by Compose patterns)
+- **Architecture**: MVVM
+- **Target SDK**: Android API 36 (Minimum API 26)
 
 ## 🚀 Getting Started
 
@@ -29,7 +31,7 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 
 - Android Studio (latest version recommended)
 - JDK 11
-- Android SDK 26+ (Minimum API level)
+- Android SDK 26+
 
 ### Setup & Run
 
@@ -43,8 +45,8 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
    Open the project folder in Android Studio.
 
 3. **Configure Environment**:
-   - The API base URL is currently hardcoded in `com.PoorMenKindle.android.network.NetworkManager`.
-   - TODO: Move `BASE_URL` to a `BuildConfig` or environment variable.
+   - The API base URL is defined in `com.poorMenKindle.android.network.NetworkManager`.
+   - Update `BASE_URL` to point to your backend server.
 
 4. **Build and Run**:
    - Connect an Android device or start an emulator.
@@ -52,6 +54,10 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
      ```bash
      ./gradlew assembleDebug
      ```
+
+## 📖 API Documentation
+
+The project communicates with a backend server named **BookWormHole**. You can find the full REST API specification in the [API_SPECIFICATION.md](API_SPECIFICATION.md) file.
 
 ## 📜 Scripts
 
@@ -66,7 +72,7 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 app/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/PoorMenKindle/android/
+│   │   ├── java/com/poorMenKindle/android/
 │   │   │   ├── data/local/      # Room database, DAOs, and OfflineSyncManager
 │   │   │   ├── network/         # Retrofit API services and models
 │   │   │   ├── ui/
@@ -81,8 +87,8 @@ app/
 
 ## 🔑 Environment Variables & Config
 
-- `NetworkManager.BASE_URL`: The endpoint for the backend service, insert the one your server is running on.
-- `SharedPreferences ("BookWormHolePrefs")`: Stores JWT tokens and user roles for session management.
+- `NetworkManager.BASE_URL`: The endpoint for the backend service.
+- `SharedPreferences ("BookWormHolePrefs")`: Stores JWT tokens and user roles.
 
 ## 🧪 Tests
 
@@ -91,7 +97,7 @@ app/
 
 ## 📄 License
 
-TODO: Add license information.
+Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
