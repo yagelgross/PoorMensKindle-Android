@@ -33,7 +33,10 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 <p align="center">
   <img src="screenshots/RequestBookScreen.jpeg" width="30%" />
 </p>
-<img src="screenshots/RecordedUsage.gif"/>
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/79b95f59-61bc-4ec2-88f1-381d45b4ff2b" width="45%" controls></video>
+</p>
 
 ## 🛠 Tech Stack
 
