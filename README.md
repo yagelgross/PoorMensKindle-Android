@@ -18,8 +18,6 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 
 ## 📱 Screenshots
 
-## 📱 Screenshots
-
 <p align="center">
   <img src="screenshots/LibraryScreen.jpeg" width="30%" />
   <img src="screenshots/BookDetailsScreen.jpeg" width="30%" />
