@@ -134,4 +134,4 @@ Contributions, issues, and feature requests are welcome!
 
 ## 🙋‍♂️ Author
 **יגל גרוס (Yagel Gross)**
-* GitHub: [@yagelgross](https://github.com/yagelgross)
+* Linkedin: [@YagelGross](https://www.linkedin.com/in/yagel-netan-el-gross-aa000a209/)
