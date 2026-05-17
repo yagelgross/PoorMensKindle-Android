@@ -1,4 +1,7 @@
 # Poor Men's Kindle
+![Android API](https://img.shields.io/badge/API-26%2B-brightgreen.svg?style=flat)
+![Kotlin](https://img.shields.io/badge/Kotlin-1.9.0-blue.svg)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 An Android e-book reader application built with Jetpack Compose, designed for a seamless reading experience with both online library sync and offline EPUB support.
 
@@ -12,6 +15,27 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 - **Book Requests**: Users can request new books directly through the app.
 - **Synchronization**: Offline sync manager for reading progress and library data.
 - **Clean Codebase**: Organized structure with a focus on readability and modularity.
+
+## 📱 Screenshots
+
+## 📱 Screenshots
+
+<p align="center">
+  <img src="screenshots/LibraryScreen.jpeg" width="30%" />
+  <img src="screenshots/BookDetailsScreen.jpeg" width="30%" />
+  <img src="screenshots/ReadScreen.jpeg" width="30%" />
+</p>
+
+<p align="center">
+  <img src="screenshots/ReadScreenSettings.jpeg" width="30%" />
+  <img src="screenshots/ChapterList.jpeg" width="30%" />
+  <img src="screenshots/AdminDashboard.jpeg" width="30%" />
+</p>
+
+<p align="center">
+  <img src="screenshots/RequestBookScreen.jpeg" width="30%" />
+  <video src="screenshots/RecordedUsage.mp4" width="30%" controls></video>
+</p>
 
 ## 🛠 Tech Stack
 
@@ -54,6 +78,7 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
      ```bash
      ./gradlew assembleDebug
      ```
+Note: This application requires the BookWormHole backend to function fully. Ensure your server is running before logging in.
 
 ## 📖 API Documentation
 
@@ -102,3 +127,10 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ---
 
 *Note: This project is actively developed. See the codebase for the latest changes and features.*
+
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome!
+
+## 🙋‍♂️ Author
+**יגל גרוס (Yagel Gross)**
+* GitHub: [@yagelgross](https://github.com/yagelgross)
