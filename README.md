@@ -116,11 +116,6 @@ app/
 - `NetworkManager.BASE_URL`: The endpoint for the backend service.
 - `SharedPreferences ("BookWormHolePrefs")`: Stores JWT tokens and user roles.
 
-## 🧪 Tests
-
-- **Unit Tests**: Located in `app/src/test`. Run with `./gradlew test`.
-- **Instrumentation Tests**: Located in `app/src/androidTest`. Run with `./gradlew connectedAndroidTest`.
-
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
