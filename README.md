@@ -11,6 +11,7 @@ An Android e-book reader application built with Jetpack Compose, designed for a 
 - **Offline Reading**: Support for reading local EPUB files.
 - **Advanced Reader**: Customizable reading experience with scroll progress tracking.
 - **Highlights**: Save and manage highlights from your books.
+- **Save Notes**: Want to keep track of your thoughts? Save notes for easy tracking.
 - **Admin Dashboard**: Manage users, books, and book requests.
 - **Book Requests**: Users can request new books directly through the app.
 - **Synchronization**: Offline sync manager for reading progress and library data.
