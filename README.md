@@ -85,6 +85,9 @@ Note: This application requires the BookWormHole backend to function fully. Ensu
 
 The project communicates with a backend server named **BookWormHole**. You can find the full REST API specification in the [API_SPECIFICATION.md](API_SPECIFICATION.md) file.
 
+## 📖 Database & Server Architecture
+The **BookWormHole** server implementation is kept private, but you can view the complete relational database schema and table structures in [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
+
 ## 📜 Scripts
 
 - `./gradlew assembleDebug`: Build the debug APK.
