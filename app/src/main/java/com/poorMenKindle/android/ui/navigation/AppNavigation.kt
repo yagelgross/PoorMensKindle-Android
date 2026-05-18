@@ -175,7 +175,7 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                                 )
 
                                 Text(
-                                    text = "Developed solely by Yagel Gross, no Noam included",
+                                    text = "Developed by Yagel Gross",
                                     fontSize = 16.sp,
                                     color = Color.DarkGray,
                                     modifier = Modifier.padding(top = 8.dp)
