@@ -342,21 +342,26 @@ fun AdminScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTabIndex == 0) {
-                FloatingActionButton(
-                    onClick = { showAddUserDialog = true },
-                    containerColor = Color(0xFF000333),
-                    contentColor = Color.White
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add User")
+            when (selectedTabIndex) {
+                0 -> {
+                    // Show Add User button on the Users tab
+                    FloatingActionButton(
+                        onClick = { showAddUserDialog = true },
+                        containerColor = Color(0xFF000333),
+                        contentColor = Color.White
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add User")
+                    }
                 }
-                // Add book button
-                FloatingActionButton(
-                    onClick = { showAddBookDialog = true },
-                    containerColor = Color(0xFF000333),
-                    contentColor = Color.White
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Book")
+                1 -> {
+                    // Show Add Book button on the Books tab
+                    FloatingActionButton(
+                        onClick = { showAddBookDialog = true },
+                        containerColor = Color(0xFF000333),
+                        contentColor = Color.White
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Book")
+                    }
                 }
             }
         },
