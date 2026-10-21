@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.poorMenKindle.android.network.BookRequestCreate
 import com.poorMenKindle.android.network.NetworkManager
 import com.poorMenKindle.android.network.OpenLibraryBook
+import com.poorMenKindle.android.ui.theme.appBackgroundBrush
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,21 +55,12 @@ fun RequestNewScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFFF3F0FF), // Soft purple
-            Color(0xFFF8FAFC), // Light gray/slate
-            Color(0xFFFFFFFF)  // White
-        )
-    )
+    val backgroundBrush = appBackgroundBrush()
 
     // Handle Open Library Request Confirmation Dialog
     if (showDialog && selectedBook != null) {
         AlertDialog(
             shape = RoundedCornerShape(16.dp),
-            containerColor = Color.White,
-            titleContentColor = Color(0xFF1F2937),
-            textContentColor = Color(0xFF4B5563),
             onDismissRequest = { showDialog = false },
             title = { Text("Request Book", fontWeight = FontWeight.Bold) },
             text = { Text("Would you like to submit a request to the admin to add '${selectedBook!!.title}' to the library?") },
@@ -97,12 +89,12 @@ fun RequestNewScreen(
                         }
                     }
                 }) {
-                    Text("Submit", color = Color(0xFF7C3AED), fontWeight = FontWeight.Bold)
+                    Text("Submit", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel", color = Color(0xFF6B7280))
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -112,9 +104,6 @@ fun RequestNewScreen(
     if (showManualDialog) {
         AlertDialog(
             shape = RoundedCornerShape(16.dp),
-            containerColor = Color.White,
-            titleContentColor = Color(0xFF1F2937),
-            textContentColor = Color(0xFF4B5563),
             onDismissRequest = { showManualDialog = false },
             title = { Text("Manual Book Request", fontWeight = FontWeight.Bold) },
             text = {
@@ -127,8 +116,8 @@ fun RequestNewScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF7C3AED),
-                            focusedLabelColor = Color(0xFF7C3AED)
+                            focusedBorderColor = MaterialTheme.colorScheme.secondary,
+                            focusedLabelColor = MaterialTheme.colorScheme.secondary
                         )
                     )
                     OutlinedTextField(
@@ -138,8 +127,8 @@ fun RequestNewScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF7C3AED),
-                            focusedLabelColor = Color(0xFF7C3AED)
+                            focusedBorderColor = MaterialTheme.colorScheme.secondary,
+                            focusedLabelColor = MaterialTheme.colorScheme.secondary
                         )
                     )
                 }
@@ -175,10 +164,8 @@ fun RequestNewScreen(
                     },
                     enabled = manualTitle.isNotBlank() && manualAuthor.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF7C3AED),
-                        contentColor = Color.White,
-                        disabledContainerColor = Color(0xFFE5E7EB),
-                        disabledContentColor = Color(0xFF9CA3AF)
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.onSecondary
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -187,7 +174,7 @@ fun RequestNewScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showManualDialog = false }) {
-                    Text("Cancel", color = Color(0xFF6B7280))
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -211,7 +198,7 @@ fun RequestNewScreen(
         ) {
             Text(
                 text = "Request a Book",
-                color = Color(0xFF4C1D95),
+                color = MaterialTheme.colorScheme.secondary,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.5).sp
@@ -220,21 +207,20 @@ fun RequestNewScreen(
             var menuExpanded by remember { mutableStateOf(false) }
             Box {
                 IconButton(onClick = { menuExpanded = true }) {
-                    Text("⋮", color = Color(0xFF4B5563), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text("⋮", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(Color.White)
+                    onDismissRequest = { menuExpanded = false }
                 ) {
                     if (NetworkManager.isAdmin) {
                         DropdownMenuItem(
-                            text = { Text("Admin Panel", color = Color(0xFF1F2937)) },
+                            text = { Text("Admin Panel") },
                             onClick = { menuExpanded = false; onNavigateToAdmin() }
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("Log Out", color = Color(0xFFEF4444)) },
+                        text = { Text("Log Out", color = MaterialTheme.colorScheme.error) },
                         onClick = {
                             menuExpanded = false
                             NetworkManager.disconnect()
@@ -257,16 +243,16 @@ fun RequestNewScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search by title or author...", color = Color(0xFF9CA3AF)) },
+                placeholder = { Text("Search by title or author...", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 modifier = Modifier
                     .weight(1f)
                     .shadow(2.dp, RoundedCornerShape(16.dp)),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedTextColor = Color(0xFF1F2937),
-                    unfocusedTextColor = Color(0xFF1F2937),
-                    focusedBorderColor = Color(0xFF7C3AED),
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedBorderColor = MaterialTheme.colorScheme.secondary,
                     unfocusedBorderColor = Color.Transparent
                 ),
                 shape = RoundedCornerShape(16.dp),
@@ -297,12 +283,12 @@ fun RequestNewScreen(
                         }
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.height(56.dp),
                 contentPadding = PaddingValues(horizontal = 20.dp)
             ) {
-                Text("Search", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Search", color = MaterialTheme.colorScheme.onSecondary, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -311,15 +297,15 @@ fun RequestNewScreen(
             onClick = { showManualDialog = true },
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            Text("Can't find it? Enter manually ✍️", color = Color(0xFF6D28D9), fontWeight = FontWeight.SemiBold)
+            Text("Can't find it? Enter manually ✍️", color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
         }
 
         if (isSearching) {
-            CircularProgressIndicator(color = Color(0xFF7C3AED), modifier = Modifier.padding(top = 20.dp))
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 20.dp))
         } else if (statusMessage.isNotEmpty()) {
             Text(
                 text = statusMessage,
-                color = if (statusMessage.contains("success", ignoreCase = true)) Color(0xFF10B981) else Color(0xFFEF4444),
+                color = if (statusMessage.contains("success", ignoreCase = true)) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(vertical = 8.dp, horizontal = 24.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -346,8 +332,8 @@ fun RequestNewScreen(
         Button(
             onClick = onNavigateBack,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color(0xFF4C1D95)
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.secondary
             ),
             shape = RoundedCornerShape(20.dp),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
@@ -389,7 +375,7 @@ fun OpenLibraryBookCard(book: OpenLibraryBook, onClick: () -> Unit) {
                 .aspectRatio(0.66f)
                 .fillMaxWidth()
                 .shadow(4.dp, RoundedCornerShape(12.dp))
-                .background(Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
             if (!book.cover_url.isNullOrEmpty()) {
@@ -402,7 +388,7 @@ fun OpenLibraryBookCard(book: OpenLibraryBook, onClick: () -> Unit) {
             } else {
                 Text(
                     text = book.title,
-                    color = Color(0xFF6B7280),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(8.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -416,7 +402,7 @@ fun OpenLibraryBookCard(book: OpenLibraryBook, onClick: () -> Unit) {
             text = book.title,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF1F2937),
+            color = MaterialTheme.colorScheme.onBackground,
             maxLines = 2,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             lineHeight = 18.sp
@@ -427,7 +413,7 @@ fun OpenLibraryBookCard(book: OpenLibraryBook, onClick: () -> Unit) {
         Text(
             text = book.author,
             fontSize = 12.sp,
-            color = Color(0xFF6B7280),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
@@ -435,7 +421,7 @@ fun OpenLibraryBookCard(book: OpenLibraryBook, onClick: () -> Unit) {
         Text(
             text = "Published ${book.publish_year ?: "Unknown"}",
             fontSize = 11.sp,
-            color = Color(0xFF9CA3AF),
+            color = MaterialTheme.colorScheme.outline,
             maxLines = 1
         )
     }

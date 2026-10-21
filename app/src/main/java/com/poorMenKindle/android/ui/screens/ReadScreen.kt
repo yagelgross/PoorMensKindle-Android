@@ -22,7 +22,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.poorMenKindle.android.data.local.AppDatabase
+import com.poorMenKindle.android.data.repository.DEFAULT_HIGHLIGHT_COLOR
+import com.poorMenKindle.android.data.repository.HighlightRepository
 import com.poorMenKindle.android.network.ChapterData
+import com.poorMenKindle.android.network.HighlightItem
 import com.poorMenKindle.android.network.NetworkManager
 import com.poorMenKindle.android.network.ProgressUpdateRequest
 import com.poorMenKindle.android.network.TocItem
@@ -30,21 +34,11 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.poorMenKindle.android.network.HighlightItem
-import com.poorMenKindle.android.network.HighlightRequest
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class, DelicateCoroutinesApi::class)
 @Composable
@@ -59,37 +53,28 @@ fun ReadScreen(
     onNavigateToHighlights: (Int, Int, Float) -> Unit
 ) {
     val context = LocalContext.current
-    val activity = context as? android.app.Activity
-    val view = androidx.compose.ui.platform.LocalView.current
     var currentScrollPercent by remember { mutableFloatStateOf(initialScrollProgress) }
+    // Forward-return slot: written only when swiping BACK (the chapter being left + its scroll),
+    // read only when swiping FORWARD, so returning to the chapter you came from restores position.
+    var lastLeftChapter by remember { mutableIntStateOf(-1) }
+    var lastLeftScroll by remember { mutableFloatStateOf(0f) }
+    // Drives auto-hiding the floating "scroll to top" button while the user is actively scrolling.
+    var scrollSignal by remember { mutableIntStateOf(0) }
+    var isScrolling by remember { mutableStateOf(false) }
 
-    DisposableEffect(Unit) {
-        activity?.window?.let { window ->
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-            val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-        }
-
-        onDispose {
-            activity?.window?.let { window ->
-                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val insetsController = WindowCompat.getInsetsController(window, view)
-                insetsController.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
+    LaunchedEffect(scrollSignal) {
+        if (scrollSignal == 0) return@LaunchedEffect
+        isScrolling = true
+        kotlinx.coroutines.delay(700)
+        isScrolling = false
     }
+
+    ReaderImmersiveEffect()
+
     val coroutineScope = rememberCoroutineScope()
-
-    val sharedPrefs = context.getSharedPreferences("ReadingSettings", android.content.Context.MODE_PRIVATE)
-
-    var fontSize by remember { mutableIntStateOf(sharedPrefs.getInt("font_size", 18)) }
-    var lineSpacing by remember { mutableFloatStateOf(sharedPrefs.getFloat("line_spacing", 1.6f)) }
-    var theme by remember { mutableStateOf(sharedPrefs.getString("theme", "Dark") ?: "Dark") }
-    var selectedFont by remember { mutableStateOf(sharedPrefs.getString("font", "Merriweather") ?: "Merriweather") }
-    var volumePagingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("volume_paging", false)) }
-    var swipeToChangeChaptersEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("swipe_to_change_chapters", true)) }
+    val readerSettings = rememberReaderSettings()
+    val highlightRepository = remember { HighlightRepository.get(context) }
+    val smartTool = rememberSmartToolState()
 
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showChapterDialog by remember { mutableStateOf(false) }
@@ -98,6 +83,8 @@ fun ReadScreen(
     var isJumping by remember { mutableStateOf(false) }
     var chapterHtml by remember { mutableStateOf("Loading...") }
     var chapterTitle by remember { mutableStateOf("") }
+    var actionModeActive by remember { mutableStateOf(false) }
+    var contentVersion by remember { mutableIntStateOf(0) }
 
     var bookHighlights by remember { mutableStateOf<List<HighlightItem>>(emptyList()) }
     var highlightsFetched by remember { mutableStateOf(false) }
@@ -114,12 +101,47 @@ fun ReadScreen(
     var numberOfMatches by remember { mutableIntStateOf(0) }
 
     // Back position handling
-    var returnPosition by remember { 
+    var returnPosition by remember {
         mutableStateOf<Pair<Int, Float>?>(
             if (returnChapterArg != -1) returnChapterArg to returnScrollArg else null
-        ) 
+        )
     }
-    var lastJumpId by remember { mutableStateOf<String?>(null) } // To avoid re-triggering on same jump
+
+    fun saveProgressAsync(chapterIndex: Int, scroll: Float) {
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(chapterIndex, scroll))
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // restore=true for swipes, false for buttons/TOC (always top). Every swipe records the chapter
+    // being left + its scroll (single slot), so swiping back to it — in either direction — returns
+    // you to that exact spot. Buttons never touch the slot.
+    fun navigateToChapter(index: Int, restore: Boolean) {
+        if (index < 0 || (totalChapters > 0 && index > totalChapters - 1)) return
+        returnPosition = null
+        val restored = if (restore && index == lastLeftChapter) lastLeftScroll else 0f
+        if (restore) {
+            lastLeftChapter = currentChapterIndex
+            lastLeftScroll = currentScrollPercent
+        }
+        currentScrollPercent = restored
+        isJumping = true
+        currentChapterIndex = index
+        saveProgressAsync(index, restored)
+    }
+
+    fun goToChapter(index: Int) = navigateToChapter(index, restore = false)
+    fun goToChapterRestoring(index: Int) = navigateToChapter(index, restore = true)
+
+    // Reset button: scroll the current chapter to the top.
+    fun resetScrollToTop() {
+        currentScrollPercent = 0f
+        webViewRef?.evaluateJavascript("window.scrollTo(0, 0);", null)
+        saveProgressAsync(currentChapterIndex, 0f)
+    }
 
     // Trigger update if initialChapter or initialScrollProgress changes due to navigation
     LaunchedEffect(initialChapter, initialScrollProgress, returnChapterArg, returnScrollArg) {
@@ -136,57 +158,15 @@ fun ReadScreen(
     // Shared components
     val (currentTime, batteryStatus) = rememberBatteryAndTime(context)
 
-    // Load Local First + Sync from Server
+    // Load local highlights first, then reconcile with the server; then fetch the TOC
     LaunchedEffect(bookId) {
         highlightsFetched = false
-        val db = com.poorMenKindle.android.data.local.AppDatabase.getDatabase(context)
-        val dao = db.bookDao()
+        bookHighlights = highlightRepository.getLocalHighlights(bookId)
+        highlightsFetched = true
+        bookHighlights = highlightRepository.syncFromServer(bookId)
 
-        // Local Load
-        val localHls = withContext(Dispatchers.IO) { dao.getHighlightsForBook(bookId) }
-        val localConverted = localHls.map {
-            HighlightItem(it.serverHighlightId ?: -it.localId, it.chapterIndex, it.highlightedText, it.note, it.color, it.scrollPercentage, "")
-        }
-        withContext(Dispatchers.Main) {
-            bookHighlights = localConverted
-            highlightsFetched = true
-        }
-
-        // Sync from Server
-        try {
-            val response = withContext(Dispatchers.IO) { NetworkManager.api.getHighlights(bookId) }
-            if (response.isSuccessful) {
-                val serverHls = response.body() ?: emptyList()
-                withContext(Dispatchers.IO) {
-                    serverHls.forEach { serverHl ->
-                        val localMatch = localHls.find { it.highlightedText == serverHl.highlighted_text && it.chapterIndex == serverHl.chapter_index }
-                        if (localMatch == null) {
-                            val newLocal = com.poorMenKindle.android.data.local.LocalHighlight(
-                                bookId = bookId,
-                                chapterIndex = serverHl.chapter_index,
-                                highlightedText = serverHl.highlighted_text,
-                                color = serverHl.color ?: "rgba(255, 235, 59, 0.4)",
-                                note = serverHl.note,
-                                scrollPercentage = serverHl.scroll_percentage,
-                                serverHighlightId = serverHl.id
-                            )
-                            dao.insertHighlight(newLocal)
-                        } else if (localMatch.serverHighlightId == null) {
-                            dao.updateHighlightServerId(localMatch.localId, serverHl.id)
-                        }
-                    }
-                }
-                val updatedLocalHls = withContext(Dispatchers.IO) { dao.getHighlightsForBook(bookId) }
-                withContext(Dispatchers.Main) {
-                    bookHighlights = updatedLocalHls.map {
-                        HighlightItem(it.serverHighlightId ?: -it.localId, it.chapterIndex, it.highlightedText, it.note, it.color, it.scrollPercentage, "")
-                    }
-                }
-            }
-        } catch (e: Exception) { }
-
-        // Fetch TOC
         coroutineScope.launch {
+            val dao = AppDatabase.getDatabase(context).bookDao()
             // First try local DAO
             val localToc = withContext(Dispatchers.IO) { dao.getTocForBook(bookId) }
             if (localToc.isNotEmpty()) {
@@ -202,7 +182,8 @@ fun ReadScreen(
                         tableOfContents = serverToc
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -222,77 +203,8 @@ fun ReadScreen(
         }
     }
 
-    var toolDialogTitle by remember { mutableStateOf("") }
-    var toolDialogContent by remember { mutableStateOf("") }
-    var isLoadingTool by remember { mutableStateOf(false) }
-
-    val publicApiClient = remember { OkHttpClient() }
-
-    fun fetchSmartTool(type: Int, rawQuery: String) {
-        val query = rawQuery.replace("\"", "").trim()
-        if (query.isEmpty()) return
-
-        isLoadingTool = true
-        toolDialogContent = "Fetching..."
-
-        when (type) {
-            1 -> toolDialogTitle = "📚 Dictionary: $query"
-            2 -> toolDialogTitle = "🌍 Hebrew Translation"
-            3 -> toolDialogTitle = "🏛 Wikipedia: $query"
-        }
-
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                val result = if (type == 2) {
-                    val response = NetworkManager.api.translateText(query)
-                    if (response.isSuccessful) {
-                        response.body()?.get("translated_text") ?: "Translation missing."
-                    } else {
-                        "Server error: ${response.code()}"
-                    }
-                } else {
-                    val url = if (type == 1) "https://api.dictionaryapi.dev/api/v2/entries/en/$query"
-                    else "https://en.wikipedia.org/api/rest_v1/page/summary/$query"
-
-                    val request = Request.Builder().url(url).build()
-                    val response = publicApiClient.newCall(request).execute()
-                    val responseBody = response.body?.string() ?: ""
-
-                    if (response.isSuccessful && responseBody.isNotEmpty()) {
-                        if (type == 1) {
-                            val jsonArray = JSONArray(responseBody)
-                            val meanings = jsonArray.getJSONObject(0).getJSONArray("meanings")
-                            meanings.getJSONObject(0).getJSONArray("definitions").getJSONObject(0)
-                                .getString("definition")
-                        } else {
-                            val jsonObj = JSONObject(responseBody)
-                            jsonObj.getString("extract")
-                        }
-                    } else {
-                        "No results found."
-                    }
-                }
-
-                withContext(Dispatchers.Main) {
-                    toolDialogContent = result
-                    isLoadingTool = false
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    toolDialogContent = "Error fetching data: ${e.localizedMessage}"
-                    isLoadingTool = false
-                }
-            }
-        }
-    }
-
     // Smart tool dialog
-    SmartToolDialog(
-        title = toolDialogTitle,
-        content = toolDialogContent,
-        isLoading = isLoadingTool,
-        onDismiss = { toolDialogTitle = "" }
-    )
+    SmartToolDialog(smartTool)
 
     // Highlight Color Picker (Kept local because it interacts heavily with WebView selection)
     var pendingHighlightColor by remember { mutableStateOf("") }
@@ -306,7 +218,7 @@ fun ReadScreen(
             text = {
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     val colorOptions = listOf(
-                        Color(0xFFFFF59D) to "rgba(255, 235, 59, 0.4)",
+                        Color(0xFFFFF59D) to DEFAULT_HIGHLIGHT_COLOR,
                         Color(0xFFA5D6A7) to "rgba(76, 175, 80, 0.4)",
                         Color(0xFF90CAF9) to "rgba(33, 150, 243, 0.4)",
                         Color(0xFFEF9A9A) to "rgba(244, 67, 54, 0.4)",
@@ -346,32 +258,16 @@ fun ReadScreen(
                 })();
             """.trimIndent(), null)
 
-            coroutineScope.launch(Dispatchers.IO) {
-                val db = com.poorMenKindle.android.data.local.AppDatabase.getDatabase(context)
-                val newLocalHl = com.poorMenKindle.android.data.local.LocalHighlight(
-                    bookId = bookId, chapterIndex = currentChapterIndex, highlightedText = pendingHighlightText,
-                    color = pendingHighlightColor, note = note, scrollPercentage = currentScrollPercent
+            coroutineScope.launch {
+                val newHighlight = highlightRepository.addHighlight(
+                    bookId = bookId,
+                    chapterIndex = currentChapterIndex,
+                    text = pendingHighlightText,
+                    note = note,
+                    color = pendingHighlightColor,
+                    scrollPercentage = currentScrollPercent
                 )
-                val generatedId = db.bookDao().insertHighlight(newLocalHl).toInt()
-                val newHighlight = HighlightItem(generatedId, currentChapterIndex, pendingHighlightText, note, pendingHighlightColor, currentScrollPercent, "")
-
-                withContext(Dispatchers.Main) { bookHighlights = bookHighlights + newHighlight }
-
-                try {
-                    val response = NetworkManager.api.addHighlight(bookId, HighlightRequest(currentChapterIndex, pendingHighlightText, note, pendingHighlightColor, currentScrollPercent))
-                    if (response.isSuccessful) {
-                        val serverResponse = response.body()
-                        val serverId = serverResponse?.get("highlight_id")?.toIntOrNull()
-                        if (serverId != null) {
-                            db.bookDao().updateHighlightServerId(generatedId, serverId)
-                            withContext(Dispatchers.Main) {
-                                bookHighlights = bookHighlights.map {
-                                    if (it.id == generatedId) it.copy(id = serverId) else it
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {}
+                bookHighlights = bookHighlights + newHighlight
             }
             showNoteDialog = false
         }
@@ -409,24 +305,26 @@ fun ReadScreen(
         chapterHtml = "<div style='color: #888; text-align: center; padding: 50px;'>Loading chapter ${currentChapterIndex + 1}...</div>"
 
         try {
-            var data = chapterCache[currentChapterIndex]
-
-            if (data == null) {
-                val db = com.poorMenKindle.android.data.local.AppDatabase.getDatabase(context)
+            val cached = chapterCache[currentChapterIndex]
+            val data: ChapterData = if (cached != null) {
+                cached
+            } else {
+                val db = AppDatabase.getDatabase(context)
                 val localChapter = withContext(Dispatchers.IO) {
                     db.bookDao().getChapter(bookId, currentChapterIndex)
                 }
 
                 if (localChapter != null) {
-                    data = ChapterData(bookId, localChapter.chapterTitle, localChapter.chapterIndex, localChapter.contentHtml)
-                    chapterCache[currentChapterIndex] = data!!
+                    ChapterData(bookId, localChapter.chapterTitle, localChapter.chapterIndex, localChapter.contentHtml)
+                        .also { chapterCache[currentChapterIndex] = it }
                 } else {
                     val response = withContext(Dispatchers.IO) {
                         NetworkManager.api.getChapter(bookId, currentChapterIndex)
                     }
-                    if (response.isSuccessful && response.body() != null) {
-                        data = response.body()
-                        chapterCache[currentChapterIndex] = data!!
+                    val body = response.body()
+                    if (response.isSuccessful && body != null) {
+                        chapterCache[currentChapterIndex] = body
+                        body
                     } else {
                         chapterHtml = "<div style='color: #ff6b6b;'>Error loading chapter: ${response.code()}</div>"
                         return@LaunchedEffect
@@ -435,57 +333,17 @@ fun ReadScreen(
             }
 
             chapterTitle = data.chapter_title
-            var htmlContent = data.text
             val chapterHighlights = bookHighlights.filter { it.chapter_index == currentChapterIndex }
+            val html = buildNetworkChapterHtml(data, chapterHighlights, readerSettings.selectedFont)
 
-            chapterHighlights.forEach { highlight ->
-                val bgColor = highlight.color ?: "rgba(255, 235, 59, 0.4)"
-                val replacement = "<mark style='background-color: $bgColor; color: inherit; border-radius: 3px; padding: 0 2px;'>${highlight.highlighted_text}</mark>"
-                htmlContent = safeHtmlReplace(htmlContent, highlight.highlighted_text, replacement)
-            }
-
-            val plainText = Jsoup.parse(htmlContent).text()
+            val plainText = Jsoup.parse(html).text()
             fullChapterWordCount = plainText.split("\\s+".toRegex()).size
             val wordsRead = (currentScrollPercent * fullChapterWordCount).toInt()
             wordCount = fullChapterWordCount - wordsRead
             val minutes = ceil(wordCount / 225.0).toInt()
             timeRemaining = if (minutes > 1) "$minutes mins left" else if (minutes == 1) "1 min left" else "< 1 min left"
 
-            val allFontsCss = getAllFontsCss()
-
-            chapterHtml = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style id="custom-font-style">
-                    $allFontsCss
-                </style>
-                <style>
-                    body { 
-                        font-family: '$selectedFont', serif; 
-                        font-size: 18px; 
-                        padding: 20px 15px; 
-                        color: #d4d4d4; 
-                        background-color: #2b2b2b; 
-                        line-height: 1.6; 
-                        margin: 0;
-                    }
-                    p { margin-bottom: 1em; }
-                    img { 
-                        max-width: 100%; 
-                        height: auto; 
-                        display: block; 
-                        margin: 15px auto; 
-                        border-radius: 8px;
-                    }
-                </style>
-            </head>
-            <body dir="auto">
-                ${htmlContent.replace("\n\n", "</p><p>").replace("\n", "<br>")}
-            </body>
-            </html>
-        """.trimIndent()
+            chapterHtml = html
 
             coroutineScope.launch(Dispatchers.IO) {
                 val windowStart = max(0, currentChapterIndex - 3)
@@ -493,18 +351,21 @@ fun ReadScreen(
                 val keysToRemove = chapterCache.keys.filter { it !in windowStart..windowEnd }
                 keysToRemove.forEach { chapterCache.remove(it) }
 
+                val dao = AppDatabase.getDatabase(context).bookDao()
                 for (i in windowStart..windowEnd) {
                     if (i != currentChapterIndex && !chapterCache.containsKey(i)) {
                         try {
-                            val db = com.poorMenKindle.android.data.local.AppDatabase.getDatabase(context)
-                            val local = db.bookDao().getChapter(bookId, i)
+                            val local = dao.getChapter(bookId, i)
                             if (local != null) {
                                 chapterCache[i] = ChapterData(bookId, local.chapterTitle, local.chapterIndex, local.contentHtml)
                             } else {
                                 val response = NetworkManager.api.getChapter(bookId, i)
-                                if (response.isSuccessful) { response.body()?.let { chapterCache[i] = it } }
+                                if (response.isSuccessful) {
+                                    response.body()?.let { chapterCache[i] = it }
+                                }
                             }
-                        } catch (e: Exception) {}
+                        } catch (_: Exception) {
+                        }
                     }
                 }
             }
@@ -535,39 +396,7 @@ fun ReadScreen(
 
     // Settings dialog
     if (showSettingsDialog) {
-        ReaderSettingsDialog(
-            fontSize = fontSize,
-            onFontSizeChange = {
-                fontSize = it
-                sharedPrefs.edit().putInt("font_size", it).apply()
-            },
-            lineSpacing = lineSpacing,
-            onLineSpacingChange = {
-                lineSpacing = it
-                sharedPrefs.edit().putFloat("line_spacing", it).apply()
-            },
-            selectedFont = selectedFont,
-            onFontChange = {
-                selectedFont = it
-                sharedPrefs.edit().putString("font", it).apply()
-            },
-            theme = theme,
-            onThemeChange = {
-                theme = it
-                sharedPrefs.edit().putString("theme", it).apply()
-            },
-            volumePagingEnabled = volumePagingEnabled,
-            onVolumePagingChange = {
-                volumePagingEnabled = it
-                sharedPrefs.edit().putBoolean("volume_paging", it).apply()
-            },
-            swipeToChangeChaptersEnabled = swipeToChangeChaptersEnabled,
-            onSwipeToChangeChaptersChange = {
-                swipeToChangeChaptersEnabled = it
-                sharedPrefs.edit().putBoolean("swipe_to_change_chapters", it).apply()
-            },
-            onDismiss = { showSettingsDialog = false }
-        )
+        ReaderSettingsDialog(settings = readerSettings, onDismiss = { showSettingsDialog = false })
     }
 
     if (showChapterDialog) {
@@ -590,21 +419,21 @@ fun ReadScreen(
             },
             text = {
                 Column {
-                        OutlinedTextField(
-                            value = chapterSearchQuery,
-                            onValueChange = { chapterSearchQuery = it },
-                            placeholder = { Text("Search chapter...", color = Color.Gray) },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            singleLine = true,
-                            leadingIcon = { Text("🔍", fontSize = 16.sp) },
-                            trailingIcon = {
-                                if (chapterSearchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { chapterSearchQuery = "" }) {
-                                        Text("✕", color = Color.White)
-                                    }
+                    OutlinedTextField(
+                        value = chapterSearchQuery,
+                        onValueChange = { chapterSearchQuery = it },
+                        placeholder = { Text("Search chapter...", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        singleLine = true,
+                        leadingIcon = { Text("🔍", fontSize = 16.sp) },
+                        trailingIcon = {
+                            if (chapterSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { chapterSearchQuery = "" }) {
+                                    Text("✕", color = Color.White)
                                 }
-                            },
-                            colors = TextFieldDefaults.colors(
+                            }
+                        },
+                        colors = TextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedContainerColor = Color.Transparent,
@@ -630,14 +459,8 @@ fun ReadScreen(
                                 if (matchesSearch) {
                                     TextButton(
                                         onClick = {
-                                            returnPosition = null
-                                            currentScrollPercent = 0f
-                                            isJumping = true
-                                            currentChapterIndex = index
+                                            goToChapter(index)
                                             showChapterDialog = false
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(index, 0f)) } catch (_: Exception) {}
-                                            }
                                         },
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
@@ -660,20 +483,8 @@ fun ReadScreen(
                                 if (matchesSearch) {
                                     TextButton(
                                         onClick = {
-                                            returnPosition = null
-                                            currentScrollPercent = 0f
-                                            isJumping = true
-                                            currentChapterIndex = index
+                                            goToChapter(index)
                                             showChapterDialog = false
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                try {
-                                                    NetworkManager.api.saveProgress(
-                                                        bookId,
-                                                        ProgressUpdateRequest(index, 0f)
-                                                    )
-                                                } catch (_: Exception) {
-                                                }
-                                            }
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(8.dp)
@@ -700,66 +511,26 @@ fun ReadScreen(
     Scaffold(
         topBar = {
             if (isSearching) {
-                TopAppBar(
-                    modifier = Modifier.displayCutoutPadding(),
-                    title = {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = {
-                                searchQuery = it
-                                webViewRef?.findAllAsync(it)
-                            },
-                            placeholder = { Text("Search...", color = Color.Gray) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
-                        )
+                ReaderSearchTopBar(
+                    searchQuery = searchQuery,
+                    onQueryChange = {
+                        searchQuery = it
+                        webViewRef?.findAllAsync(it)
                     },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            isSearching = false
-                            searchQuery = ""
-                            webViewRef?.clearMatches()
-                            // Reset the counters when closing search
-                            activeMatchOrdinal = 0
-                            numberOfMatches = 0
-                        }) {
-                            Text("✕", color = Color.White, fontSize = 20.sp)
-                        }
+                    onClose = {
+                        isSearching = false
+                        searchQuery = ""
+                        webViewRef?.clearMatches()
+                        activeMatchOrdinal = 0
+                        numberOfMatches = 0
                     },
-                    actions = {
-                        // Display match counts
-                        if (numberOfMatches > 0) {
-                            Text(
-                                text = "${activeMatchOrdinal + 1}/$numberOfMatches",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
-                        } else if (searchQuery.isNotEmpty()) {
-                            Text(
-                                text = "0/0",
-                                color = Color.Gray,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
-                        }
-
-                        IconButton(onClick = { webViewRef?.findNext(false) }) {
-                            Text("▲", color = Color.White, fontSize = 20.sp)
-                        }
-                        IconButton(onClick = { webViewRef?.findNext(true) }) {
-                            Text("▼", color = Color.White, fontSize = 20.sp)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E))
+                    onFindPrev = { webViewRef?.findNext(false) },
+                    onFindNext = { webViewRef?.findNext(true) },
+                    matchCounter = when {
+                        numberOfMatches > 0 -> "${activeMatchOrdinal + 1}/$numberOfMatches"
+                        searchQuery.isNotEmpty() -> "0/0"
+                        else -> null
+                    }
                 )
             } else {
                 TopAppBar(
@@ -796,12 +567,9 @@ fun ReadScreen(
                     },
                     actions = {
                         IconButton(onClick = { isSearching = true }) { Text("🔍", fontSize = 20.sp) }
-                                IconButton(onClick = { 
-                                    // Capture current scroll before navigating
-                                    val currentScroll = currentScrollPercent
-                                    
-                                    onNavigateToHighlights(bookId, currentChapterIndex, currentScroll) 
-                                }) {
+                        IconButton(onClick = {
+                            onNavigateToHighlights(bookId, currentChapterIndex, currentScrollPercent)
+                        }) {
                             Text("📝", fontSize = 20.sp)
                         }
                         IconButton(onClick = { showSettingsDialog = true }) {
@@ -816,63 +584,53 @@ fun ReadScreen(
             }
         },
         bottomBar = {
-            Surface(color = Color(0xFF1E1E1E), contentColor = Color.White, modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
-                            onClick = { 
-                                if (currentChapterIndex > 0) {
-                                    returnPosition = null
-                                    currentScrollPercent = 0f
-                                    isJumping = true
-                                    currentChapterIndex-- 
-                                    val nextChapter = currentChapterIndex
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(nextChapter, 0f)) } catch (_: Exception) {}
-                                    }
-                                }
-                            },
-                            enabled = currentChapterIndex > 0,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF442694))
-                        ) { Text("◀ Prev") }
-                        TextButton(onClick = { 
-                            returnPosition = null
-                            showChapterDialog = true 
-                        }) {
-                            Text("Ch. ${currentChapterIndex + 1} / ${if (totalChapters == 0) "?" else totalChapters} ▾", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Button(
-                            onClick = { 
-                                if (currentChapterIndex < totalChapters - 1) {
-                                    returnPosition = null
-                                    currentScrollPercent = 0f
-                                    isJumping = true
-                                    currentChapterIndex++ 
-                                    val nextChapter = currentChapterIndex
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(nextChapter, 0f)) } catch (_: Exception) {}
-                                    }
-                                }
-                            },
-                            enabled = currentChapterIndex < totalChapters - 1,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF442694))
-                        ) { Text("Next ▶") }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("[$currentTime]  [$batteryStatus]  ($timeRemaining)  [Words: $wordCount]", color = Color.LightGray, fontSize = 12.sp, fontFamily = FontFamily.Serif)
+            ReaderBottomBar(
+                currentChapterIndex = currentChapterIndex,
+                totalChapters = totalChapters,
+                statusText = "[$currentTime]  [$batteryStatus]  ($timeRemaining)  [Words: $wordCount]",
+                onPrevChapter = { goToChapter(currentChapterIndex - 1) },
+                onNextChapter = { goToChapter(currentChapterIndex + 1) },
+                onSelectChapter = {
+                    returnPosition = null
+                    showChapterDialog = true
                 }
-            }
+            )
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize().background(Color(0xFF2b2b2b))) {
+            PagedReaderContainer(
+                modifier = Modifier.fillMaxSize(),
+                currentChapterIndex = currentChapterIndex,
+                contentVersion = contentVersion,
+                swipeEnabled = { readerSettings.swipeToChangeChaptersEnabled },
+                actionModeActive = { actionModeActive },
+                canGoBack = { currentChapterIndex > 0 },
+                canGoForward = { totalChapters > 0 && currentChapterIndex < totalChapters - 1 },
+                themeBgColor = composeReaderBgColor(readerSettings.theme),
+                neighborInterceptRequest = { url -> serveReaderFont(context, url) },
+                readerStyleJs = readerStyleJs(readerSettings),
+                buildNeighborHtml = { idx ->
+                    chapterCache[idx]?.let {
+                        buildNetworkChapterHtml(
+                            it,
+                            bookHighlights.filter { h -> h.chapter_index == idx },
+                            readerSettings.selectedFont
+                        )
+                    }
+                },
+                onCommitBack = { goToChapterRestoring(currentChapterIndex - 1) },
+                onCommitForward = { goToChapterRestoring(currentChapterIndex + 1) },
+                floatingButton = {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !isScrolling,
+                        enter = androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.fadeOut(),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
+                    ) {
+                        ReaderScrollTopButton(onClick = { resetScrollToTop() })
+                    }
+                }
+            ) { register ->
             AndroidView(
                 factory = { ctx ->
                     object : SmartWebView(ctx) {
@@ -883,6 +641,7 @@ fun ReadScreen(
                                     menu: android.view.Menu?
                                 ): Boolean {
                                     val result = callback?.onCreateActionMode(mode, menu) ?: false
+                                    actionModeActive = true
                                     menu?.add(0, 1, 2, "📚 Dictionary")
                                     menu?.add(0, 2, 1, "🌍 Translate (HE)")
                                     menu?.add(0, 3, 3, "🏛 Wikipedia")
@@ -925,7 +684,7 @@ fun ReadScreen(
                                         } else {
                                             evaluateJavascript("(function(){return window.getSelection().toString();})()") { selection ->
                                                 val cleanText = selection?.trim('"')?.trim() ?: ""
-                                                if (cleanText.isNotBlank()) fetchSmartTool(clickedItemId, cleanText)
+                                                if (cleanText.isNotBlank()) smartTool.fetch(clickedItemId, cleanText)
                                                 mode?.finish()
                                             }
                                         }
@@ -935,6 +694,7 @@ fun ReadScreen(
                                 }
 
                                 override fun onDestroyActionMode(mode: android.view.ActionMode?) {
+                                    actionModeActive = false
                                     callback?.onDestroyActionMode(mode)
                                 }
 
@@ -955,6 +715,7 @@ fun ReadScreen(
                         }
                     }.apply {
                         webViewRef = this
+                        register(this)
                         setFindListener { activeMatch, count, isDoneCounting ->
                             if (isDoneCounting) {
                                 activeMatchOrdinal = activeMatch
@@ -962,78 +723,52 @@ fun ReadScreen(
                             }
                         }
                         settings.javaScriptEnabled = true
+                        settings.allowFileAccess = false
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                        settings.allowFileAccess = true
-                    webViewClient = object : android.webkit.WebViewClient() {
+                        webViewClient = object : android.webkit.WebViewClient() {
                             override fun shouldInterceptRequest(
                                 view: WebView?,
                                 request: android.webkit.WebResourceRequest?
                             ): android.webkit.WebResourceResponse? {
-                                val url = request?.url?.toString() ?: return null
-
-                                if (url.startsWith("https://appassets.local/fonts/")) {
-                                    val fontFileName = url.substringAfterLast("/")
-                                    val cleanFileName = java.net.URLDecoder.decode(fontFileName, "UTF-8")
-                                    try {
-                                        val inputStream = ctx.assets.open("fonts/$cleanFileName")
-                                        val response =
-                                            android.webkit.WebResourceResponse("font/ttf", "UTF-8", inputStream)
-                                        response.responseHeaders = mapOf("Access-Control-Allow-Origin" to "*")
-                                        return response
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                }
-                                return super.shouldInterceptRequest(view, request)
+                                val url = request?.url?.toString()
+                                return serveReaderFont(ctx, url) ?: super.shouldInterceptRequest(view, request)
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
-                                val bgColor = when (theme) {
-                                    "Light" -> "#ffffff"; "Sepia" -> "#f4ecd8"; else -> "#2b2b2b"
-                                }
-                                val textColor = when (theme) {
-                                    "Light" -> "#000000"; "Sepia" -> "#5b4636"; else -> "#d4d4d4"
-                                }
+                                // Page has painted: let the slide overlay lift right away.
+                                contentVersion++
+                                view?.evaluateJavascript(readerStyleJs(readerSettings), null)
 
-                                val js = """
-    document.body.style.fontSize = '${fontSize}px';
-    document.body.style.lineHeight = '${lineSpacing}';
-    document.body.style.backgroundColor = '$bgColor';
-    document.body.style.color = '$textColor';
-    document.body.style.fontFamily = "'${selectedFont}', serif";
-""".trimIndent()
-                                view?.evaluateJavascript(js, null)
-                                
                                 val scrollJs = """
-                (function() {
-                    var applyScroll = function() {
-                        var scrollHeight = document.body.scrollHeight;
-                        var clientHeight = document.documentElement.clientHeight;
-                        var maxScroll = scrollHeight - clientHeight;
-                        if (maxScroll > 0) {
-                            window.scrollTo(0, $currentScrollPercent * maxScroll);
-                        }
-                    };
-                    applyScroll();
-                    setTimeout(applyScroll, 50);
-                    setTimeout(applyScroll, 150);
-                    setTimeout(applyScroll, 400);
-                    setTimeout(function() {
-                        window.androidObj.onJumpFinished();
-                    }, 500);
-                })();
-            """.trimIndent()
+                                    (function() {
+                                        var applyScroll = function() {
+                                            var scrollHeight = document.body.scrollHeight;
+                                            var clientHeight = document.documentElement.clientHeight;
+                                            var maxScroll = scrollHeight - clientHeight;
+                                            if (maxScroll > 0) {
+                                                window.scrollTo(0, $currentScrollPercent * maxScroll);
+                                            }
+                                        };
+                                        applyScroll();
+                                        setTimeout(applyScroll, 50);
+                                        setTimeout(applyScroll, 150);
+                                        setTimeout(applyScroll, 400);
+                                        setTimeout(function() {
+                                            window.androidObj.onJumpFinished();
+                                        }, 500);
+                                    })();
+                                """.trimIndent()
                                 view?.evaluateJavascript(scrollJs, null)
-                                
+
                                 // Reset isJumping after a safety timeout if the JS interface fails to trigger
                                 view?.postDelayed({
                                     isJumping = false
                                 }, 1000)
                             }
                         }
-                        
+
                         addJavascriptInterface(object {
                             @android.webkit.JavascriptInterface
                             fun onJumpFinished() {
@@ -1041,9 +776,10 @@ fun ReadScreen(
                             }
                         }, "androidObj")
 
-                        setOnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
+                        setOnScrollChangeListener { _, _, scrollY, _, _ ->
                             if (isJumping) return@setOnScrollChangeListener
-                            
+                            scrollSignal++
+
                             val contentHeight = this.contentHeight.toFloat()
                             val webViewHeight = this.height.toFloat() / context.resources.displayMetrics.density
 
@@ -1057,106 +793,48 @@ fun ReadScreen(
                             }
                         }
 
-                        val gestureDetector = android.view.GestureDetector(ctx, object : android.view.GestureDetector.SimpleOnGestureListener() {
-                            private val SWIPE_THRESHOLD = 120
-                            private val SWIPE_VELOCITY_THRESHOLD = 150
-                            override fun onFling(e1: android.view.MotionEvent?, e2: android.view.MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                                if (e1 == null) return false
-                                val diffX = e2.x - e1.x
-                                val diffY = e2.y - e1.y
-                                if (swipeToChangeChaptersEnabled && abs(diffX) > abs(diffY)) {
-                                    if (abs(diffX) > SWIPE_THRESHOLD && abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                                        if (diffX > 0) {
-                                            if (currentChapterIndex > 0) {
-                                                returnPosition = null
-                                                currentScrollPercent = 0f
-                                                isJumping = true
-                                                currentChapterIndex--
-                                                val nextChapter = currentChapterIndex
-                                                coroutineScope.launch(Dispatchers.IO) {
-                                                    try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(nextChapter, 0f)) } catch (_: Exception) {}
-                                                }
-                                            }
-                                        } else {
-                                            if (currentChapterIndex < totalChapters - 1) {
-                                                returnPosition = null
-                                                currentScrollPercent = 0f
-                                                isJumping = true
-                                                currentChapterIndex++
-                                                val nextChapter = currentChapterIndex
-                                                coroutineScope.launch(Dispatchers.IO) {
-                                                    try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(nextChapter, 0f)) } catch (_: Exception) {}
-                                                }
-                                            }
-                                        }
-                                        return true
-                                    }
-                                }
-                                return false
-                            }
-                        })
-
-                        setOnTouchListener { view, event ->
-                            val handled = gestureDetector.onTouchEvent(event)
-                            if (handled) view.performClick()
-                            false
-                        }
                     }
                 },
                 update = { webView ->
                     if (webView.tag != chapterHtml) {
-                        webView.loadDataWithBaseURL("file:///android_asset/", chapterHtml, "text/html", "UTF-8", null)
+                        webView.loadDataWithBaseURL(READER_BASE_URL, chapterHtml, "text/html", "UTF-8", null)
                         webView.tag = chapterHtml
                     }
 
-                    val bgColor = when (theme) { "Light" -> "#ffffff"; "Sepia" -> "#f4ecd8"; else -> "#2b2b2b" }
-                    val textColor = when (theme) { "Light" -> "#000000"; "Sepia" -> "#5b4636"; else -> "#d4d4d4" }
+                    webView.evaluateJavascript(readerStyleJs(readerSettings), null)
 
-                    val js = """
-    document.body.style.fontSize = '${fontSize}px';
-    document.body.style.lineHeight = '${lineSpacing}';
-    document.body.style.backgroundColor = '$bgColor';
-    document.body.style.color = '$textColor';
-    document.body.style.fontFamily = "'${selectedFont}', serif";
-""".trimIndent()
-                    webView.evaluateJavascript(js, null)
-
-                    webView.setOnKeyListener { _, keyCode, event ->
-                        if (volumePagingEnabled && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                            when (keyCode) {
-                                android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                                    if (currentChapterIndex < totalChapters - 1) {
-                                        currentScrollPercent = 0f
-                                        currentChapterIndex++
-                                        val nextChapter = currentChapterIndex
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(nextChapter, 0f)) } catch (_: Exception) {}
-                                        }
-                                    }
-                                    true
-                                }
-                                android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
-                                    if (currentChapterIndex > 0) {
-                                        currentScrollPercent = 0f
-                                        currentChapterIndex--
-                                        val nextChapter = currentChapterIndex
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            try { NetworkManager.api.saveProgress(bookId, ProgressUpdateRequest(nextChapter, 0f)) } catch (_: Exception) {}
-                                        }
-                                    }
-                                    true
-                                }
-                                else -> false
-                            }
-                        } else {
-                            false
-                        }
-                    }
+                    webView.setOnKeyListener(
+                        volumePagingKeyListener(
+                            isEnabled = { readerSettings.volumePagingEnabled },
+                            onPageBack = { goToChapter(currentChapterIndex - 1) },
+                            onPageForward = { goToChapter(currentChapterIndex + 1) }
+                        )
+                    )
                 },
                 modifier = Modifier.fillMaxSize()
             )
+            }
         }
     }
+}
+
+/** Builds reader HTML for a network chapter: sanitize, bake in highlights, wrap in the template. */
+fun buildNetworkChapterHtml(
+    data: ChapterData,
+    highlights: List<HighlightItem>,
+    font: String
+): String {
+    // Strip scripts/handlers from server-supplied HTML before the JS-enabled WebView sees it
+    var htmlContent = sanitizeChapterHtml(data.text)
+    highlights.forEach { highlight ->
+        val bgColor = highlight.color ?: DEFAULT_HIGHLIGHT_COLOR
+        val replacement = "<mark style='background-color: $bgColor; color: inherit; border-radius: 3px; padding: 0 2px;'>${highlight.highlighted_text}</mark>"
+        htmlContent = safeHtmlReplace(htmlContent, highlight.highlighted_text, replacement)
+    }
+    return buildReaderHtml(
+        htmlContent.replace("\n\n", "</p><p>").replace("\n", "<br>"),
+        font
+    )
 }
 
 fun safeHtmlReplace(html: String, target: String, replacement: String): String {
@@ -1166,7 +844,6 @@ fun safeHtmlReplace(html: String, target: String, replacement: String): String {
             if (part.startsWith("<")) {
                 part
             } else {
-                // Use a regex with word boundaries or just literal replace? 
                 // Literal replace is safer for general text selection.
                 part.replace(target, replacement)
             }

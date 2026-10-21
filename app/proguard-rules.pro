@@ -4,6 +4,10 @@
 -keepattributes EnclosingMethod
 -keepattributes InnerClasses
 
+# Tink (via androidx.security:security-crypto) references compile-only
+# error-prone annotations that are not packaged in the app
+-dontwarn com.google.errorprone.annotations.**
+
 # 2. Retrofit + KOTLIN COROUTINES (This fixes the suspend function crash!)
 -keep,allowobfuscation,allowshrinking interface kotlin.coroutines.Continuation
 -dontwarn retrofit2.**

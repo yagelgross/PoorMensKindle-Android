@@ -3,6 +3,7 @@ package com.poorMenKindle.android.network
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.poorMenKindle.android.BuildConfig
 import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -13,8 +14,8 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 object NetworkManager {
-    // Default value for development, override via gradle or local config if needed
-    const val BASE_URL = "http://localhost:8000"
+    // Configured per-machine via API_BASE_URL in local.properties (see app/build.gradle.kts)
+    val BASE_URL: String = BuildConfig.API_BASE_URL
 
     var jwtToken: String? = null
     var isAdmin: Boolean = false
@@ -33,30 +34,38 @@ object NetworkManager {
         chain.proceed(requestBuilder.build())
     }
 
-    private val cacheInterceptor = Interceptor { chain ->
+    // Offline: serve cached GETs up to 7 days old instead of failing immediately
+    private val offlineCacheInterceptor = Interceptor { chain ->
         var request = chain.request()
-
-        // Offline: use cache up to 7 days old
-        if (!hasNetwork(appContext)) {
+        if (request.method == "GET" && !hasNetwork(appContext)) {
             request = request.newBuilder()
                 .header("Cache-Control", "public, only-if-cached, max-stale=" + 60 * 60 * 24 * 7)
                 .build()
         }
+        chain.proceed(request)
+    }
 
-        val response = chain.proceed(request)
-
-        // Online: cache data for 1 hour
-        if (hasNetwork(appContext)) {
+    // Cache immutable book content (chapters, covers, TOC) for an hour. This must be a
+    // network interceptor: OkHttp stores responses in its cache before application
+    // interceptors see them, so rewriting headers in an application interceptor has no
+    // effect on caching. Mutable endpoints (books list, progress) are left uncached.
+    private val cacheRewriteInterceptor = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+        val path = chain.request().url.encodedPath
+        val isBookContent = path.contains("/chapters/") || path.endsWith("/cover") || path.endsWith("/toc")
+        if (isBookContent) {
             response.newBuilder()
                 .header("Cache-Control", "public, max-age=" + 60 * 60)
+                .removeHeader("Pragma")
                 .build()
         } else {
             response
         }
     }
 
+    // Bodies contain credentials and bearer tokens — never log them in release builds
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
     }
 
     // Standard OkHttpClient setup
@@ -67,11 +76,12 @@ object NetworkManager {
         OkHttpClient.Builder()
             .cache(myCache)
             .addInterceptor(authInterceptor)
-            .addInterceptor(cacheInterceptor)
+            .addInterceptor(offlineCacheInterceptor)
+            .addNetworkInterceptor(cacheRewriteInterceptor)
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(120, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(240, TimeUnit.SECONDS)
+            .connectTimeout(480, TimeUnit.SECONDS)
+            .readTimeout(480, TimeUnit.SECONDS)
+            .writeTimeout(480, TimeUnit.SECONDS)
             .build()
     }
 

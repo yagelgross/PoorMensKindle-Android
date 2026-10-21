@@ -1,10 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
+    id("com.google.devtools.ksp") version "2.3.2"
     id("com.mikepenz.aboutlibraries.plugin")
 }
+
+// Server URL lives in local.properties (gitignored) so personal hosts never land in the repo
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val apiBaseUrl: String = localProperties.getProperty("API_BASE_URL") ?: "http://10.0.2.2:8000"
 
 android {
     namespace = "com.poorMenKindle.android"
@@ -18,6 +27,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {
@@ -37,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -44,7 +56,11 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
     implementation(libs.androidx.activity.compose)
+
+    // Encrypted storage for the session token
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -85,7 +101,5 @@ dependencies {
         exclude(group = "net.sf.kxml", module = "kxml2")
     }
 
-    // Satisfies epublib's internal logging requirement without crashing Android
-    implementation("org.slf4j:slf4j-nop:1.7.36")
     implementation("com.mikepenz:aboutlibraries-compose-m3:11.2.3")
 }

@@ -9,12 +9,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -25,11 +23,13 @@ import com.poorMenKindle.android.network.NetworkManager
 import com.poorMenKindle.android.network.NewUserRequest
 import com.poorMenKindle.android.network.RequestItem
 import com.poorMenKindle.android.network.UserInfo
+import com.poorMenKindle.android.ui.theme.adminBackgroundBrush
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.Response
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,15 +50,13 @@ fun AdminScreen(
     var showAddUserDialog by remember { mutableStateOf(false) }
     var showAddBookDialog by remember { mutableStateOf(false) }
     var showResetPasswordDialog by remember { mutableStateOf<UserInfo?>(null) }
+    var confirmDeleteUser by remember { mutableStateOf<UserInfo?>(null) }
+    var confirmDeleteBook by remember { mutableStateOf<BookInfo?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     var seriesName by remember { mutableStateOf("") }
     var seriesNumber by remember { mutableStateOf("") }
-
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(Color(0xFFfcd6b5), Color(0xFFfc6969))
-    )
 
     fun loadData() {
         statusMessage = "Loading..."
@@ -85,7 +83,65 @@ fun AdminScreen(
         }
     }
 
+    /** Runs an admin API call, surfaces failures in the status line,
+     *  and refreshes the list. */
+    fun runAdminAction(actionLabel: String, action: suspend () -> Response<Map<String, String>>) {
+        coroutineScope.launch {
+            try {
+                val res = withContext(Dispatchers.IO) { action() }
+                if (!res.isSuccessful) {
+                    statusMessage = "$actionLabel failed: ${res.code()}"
+                    return@launch
+                }
+            } catch (e: Exception) {
+                statusMessage = "$actionLabel failed: ${e.message}"
+                return@launch
+            }
+            loadData()
+        }
+    }
+
     LaunchedEffect(selectedTabIndex) { loadData() }
+
+    // Confirm: delete user
+    confirmDeleteUser?.let { user ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteUser = null },
+            title = { Text("Delete User?") },
+            text = { Text("This will permanently delete \"${user.username}\" and their data. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteUser = null
+                    runAdminAction("Delete user") { NetworkManager.api.deleteUser(user.id) }
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteUser = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Confirm: delete book
+    confirmDeleteBook?.let { book ->
+        AlertDialog(
+            onDismissRequest = { confirmDeleteBook = null },
+            title = { Text("Delete Book?") },
+            text = { Text("This will permanently remove \"${book.title}\" from the library for all users. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteBook = null
+                    runAdminAction("Delete book") { NetworkManager.api.deleteBook(book.id) }
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteBook = null }) { Text("Cancel") }
+            }
+        )
+    }
 
     if (showResetPasswordDialog != null) {
         val targetUser = showResetPasswordDialog!!
@@ -172,14 +228,8 @@ fun AdminScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showAddUserDialog = false
-                    coroutineScope.launch {
-                        try {
-                            val req = NewUserRequest(newUsername, newPassword, isNewAdmin)
-                            withContext(Dispatchers.IO) { NetworkManager.api.addUser(req) }
-                            loadData() // Refresh list
-                        } catch (e: Exception) {
-                            statusMessage = "Failed to add user."
-                        }
+                    runAdminAction("Add user") {
+                        NetworkManager.api.addUser(NewUserRequest(newUsername, newPassword, isNewAdmin))
                     }
                 }) { Text("Add") }
             },
@@ -243,14 +293,20 @@ fun AdminScreen(
 
                     if (isUploading) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                            CircularProgressIndicator(color = Color(0xFF4dd0e1))
-                            Text("Uploading & Extracting...", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "Uploading & Extracting...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
                         }
                     } else {
                         Button(
                             onClick = { epubPicker.launch(arrayOf("application/epub+zip")) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (selectedFileUri == null) Color(0xFF000333) else Color(0xFF2ecc71)
+                                containerColor = if (selectedFileUri == null) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.tertiary
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -260,6 +316,7 @@ fun AdminScreen(
                 }
             },
             confirmButton = {
+                val canUpload = newTitle.isNotBlank() && newAuthor.isNotBlank() && selectedFileUri != null
                 TextButton(
                     onClick = {
                         val uri = selectedFileUri ?: return@TextButton
@@ -315,16 +372,20 @@ fun AdminScreen(
                         }
                     },
                     // Ensure the button is only clickable if all fields are filled and a file is picked
-                    enabled = newTitle.isNotBlank() && newAuthor.isNotBlank() && selectedFileUri != null && !isUploading
+                    enabled = canUpload && !isUploading
                 ) {
-                    Text("Upload", color = if (newTitle.isNotBlank() && newAuthor.isNotBlank() && selectedFileUri != null) Color(0xFF2ecc71) else Color.Gray, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Upload",
+                        color = if (canUpload) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showAddBookDialog = false },
                     enabled = !isUploading
-                ) { Text("Cancel", color = Color.Gray) }
+                ) { Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         )
     }
@@ -332,10 +393,10 @@ fun AdminScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("⚙ Admin Dashboard", fontWeight = FontWeight.Bold, color = Color(0xFF000333)) },
+                title = { Text("⚙ Admin Dashboard", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF000333))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -347,8 +408,8 @@ fun AdminScreen(
                     // Show Add User button on the Users tab
                     FloatingActionButton(
                         onClick = { showAddUserDialog = true },
-                        containerColor = Color(0xFF000333),
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Add User")
                     }
@@ -357,8 +418,8 @@ fun AdminScreen(
                     // Show Add Book button on the Books tab
                     FloatingActionButton(
                         onClick = { showAddBookDialog = true },
-                        containerColor = Color(0xFF000333),
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Add Book")
                     }
@@ -366,15 +427,15 @@ fun AdminScreen(
             }
         },
         containerColor = Color.Transparent,
-        modifier = Modifier.background(backgroundBrush)
+        modifier = Modifier.background(adminBackgroundBrush())
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
 
             // Tabs
             TabRow(
                 selectedTabIndex = selectedTabIndex,
-                containerColor = Color.White.copy(alpha = 0.4f),
-                contentColor = Color(0xFF000333)
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                contentColor = MaterialTheme.colorScheme.primary
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
@@ -392,16 +453,22 @@ fun AdminScreen(
                 placeholder = { Text("Search currently loaded data...") },
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White.copy(alpha = 0.6f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.4f),
-                    focusedBorderColor = Color(0xFF000333)
+                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
                 ),
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true
             )
 
             if (statusMessage.isNotEmpty()) {
-                Text(statusMessage, modifier = Modifier.padding(horizontal = 16.dp), color = Color.DarkGray)
+                val isFailure = statusMessage.contains("fail", ignoreCase = true) ||
+                        statusMessage.contains("error", ignoreCase = true)
+                Text(
+                    statusMessage,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = if (isFailure) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             // Lists
@@ -415,8 +482,9 @@ fun AdminScreen(
                         items(filteredUsers) { user ->
                             UserCard(
                                 user = user,
-                                scope = coroutineScope,
-                                onRefresh = { loadData() },
+                                onPromote = { runAdminAction("Promote") { NetworkManager.api.promoteUser(user.id) } },
+                                onDemote = { runAdminAction("Demote") { NetworkManager.api.demoteUser(user.id) } },
+                                onDelete = { confirmDeleteUser = user },
                                 onResetPassword = { showResetPasswordDialog = it }
                             )
                         }
@@ -429,13 +497,17 @@ fun AdminScreen(
                         }
 
                         items(filteredBooks) { book ->
-                            AdminBookCard(book, coroutineScope, onRefresh = { loadData() })
+                            AdminBookCard(book = book, onDelete = { confirmDeleteBook = book })
                         }
                     }
                     2 -> {
                         val filteredRequests = requests.filter { it.title.contains(searchQuery, ignoreCase = true) }
                         items(filteredRequests) { req ->
-                            RequestCard(req, coroutineScope, onRefresh = { loadData() })
+                            RequestCard(
+                                req = req,
+                                onApprove = { runAdminAction("Approve") { NetworkManager.api.updateRequestStatus(req.id, "approved") } },
+                                onReject = { runAdminAction("Reject") { NetworkManager.api.updateRequestStatus(req.id, "rejected") } }
+                            )
                         }
                     }
                 }
@@ -445,48 +517,54 @@ fun AdminScreen(
 }
 
 @Composable
-fun UserCard(user: UserInfo, scope: kotlinx.coroutines.CoroutineScope, onRefresh: () -> Unit, onResetPassword: (UserInfo) -> Unit) {
+fun UserCard(
+    user: UserInfo,
+    onPromote: () -> Unit,
+    onDemote: () -> Unit,
+    onDelete: () -> Unit,
+    onResetPassword: (UserInfo) -> Unit
+) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text(text = "ID: ${user.id} | ${user.username}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 if (user.isAdmin) {
-                    Text("ADMIN", color = Color(0xFF2ecc71), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    Text("ADMIN", color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                 }
             }
-            Text("Joined: ${user.createdAt}", fontSize = 12.sp, color = Color.DarkGray)
-            Text("Last Login: ${user.lastLogin ?: "Never"}", fontSize = 12.sp, color = Color.DarkGray)
+            Text("Joined: ${user.createdAt}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Last Login: ${user.lastLogin ?: "Never"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (user.isAdmin) {
-                    Button(onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { NetworkManager.api.demoteUser(user.id) }
-                            onRefresh()
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) { Text("Demote") }
+                    Button(
+                        onClick = onDemote,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) { Text("Demote") }
                 } else {
-                    Button(onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { NetworkManager.api.promoteUser(user.id) }
-                            onRefresh()
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ecc71))) { Text("Promote") }
+                    Button(
+                        onClick = onPromote,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    ) { Text("Promote") }
                 }
 
-                Button(onClick = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { NetworkManager.api.deleteUser(user.id) }
-                        onRefresh()
-                    }
-                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))) { Text("Delete") }
+                Button(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
 
-                Button(onClick = { onResetPassword(user) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3498db))) {
+                Button(
+                    onClick = { onResetPassword(user) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
                     Text("Reset")
                 }
             }
@@ -495,9 +573,9 @@ fun UserCard(user: UserInfo, scope: kotlinx.coroutines.CoroutineScope, onRefresh
 }
 
 @Composable
-fun AdminBookCard(book: BookInfo, scope: kotlinx.coroutines.CoroutineScope, onRefresh: () -> Unit) {
+fun AdminBookCard(book: BookInfo, onDelete: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -510,22 +588,20 @@ fun AdminBookCard(book: BookInfo, scope: kotlinx.coroutines.CoroutineScope, onRe
                     Text(
                         text = "${book.series_name} $numStr".trim(),
                         fontSize = 12.sp,
-                        color = Color(0xFFe67e22),
+                        color = MaterialTheme.colorScheme.secondary,
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
                 Text(text = book.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(text = book.author, color = Color.DarkGray, fontSize = 14.sp)
-                Text(text = "ID: ${book.id} | ${book.total_chapters} Chapters", fontSize = 12.sp, color = Color.Gray)
+                Text(text = book.author, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                Text(text = "ID: ${book.id} | ${book.total_chapters} Chapters", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
             }
-            Button(onClick = {
-                scope.launch {
-                    withContext(Dispatchers.IO) { NetworkManager.api.deleteBook(book.id) }
-                    onRefresh()
-                }
-            }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))) {
+            Button(
+                onClick = onDelete,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
                 Text("Delete")
             }
         }
@@ -533,55 +609,46 @@ fun AdminBookCard(book: BookInfo, scope: kotlinx.coroutines.CoroutineScope, onRe
 }
 
 @Composable
-fun RequestCard(req: RequestItem, scope: kotlinx.coroutines.CoroutineScope, onRefresh: () -> Unit) {
+fun RequestCard(req: RequestItem, onApprove: () -> Unit, onReject: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.8f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = req.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(text = "By: ${req.author}", color = Color.DarkGray, fontSize = 14.sp)
-            Text(text = "Requested by: ${req.requestedBy}", fontSize = 12.sp, color = Color.Gray)
-            Text(text = "Status: ${req.status.uppercase()}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (req.status == "pending") Color(0xFFe67e22) else if (req.status == "approved") Color(0xFF2ecc71) else Color(0xFFe74c3c))
+            Text(text = "By: ${req.author}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            Text(text = "Requested by: ${req.requestedBy}", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            Text(
+                text = "Status: ${req.status.uppercase()}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = when (req.status) {
+                    "pending" -> MaterialTheme.colorScheme.secondary
+                    "approved" -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.error
+                }
+            )
 
             if (req.status == "pending") {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "rejected") }
-                            onRefresh()
-                        }
-                    }, modifier = Modifier.background(Color(0xFFe74c3c).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Download", tint = Color(0xFFe74c3c))
-                    }
+                    Button(
+                        onClick = onApprove,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    ) { Text("✔ Approve") }
 
-                    Button(onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "approved") }
-                            onRefresh()
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2ecc71))) { Text("✔ Approve") }
-
-                    Button(onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "rejected") }
-                            onRefresh()
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))) { Text("✖ Reject") }
+                    Button(
+                        onClick = onReject,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("✖ Reject") }
                 }
-            }
-            else if (req.status == "approved") {
+            } else if (req.status == "approved") {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) { NetworkManager.api.updateRequestStatus(req.id, "rejected") }
-                            onRefresh()
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFe74c3c))) { Text("Delete") }
-
+                    Button(
+                        onClick = onReject,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Delete") }
                 }
             }
         }

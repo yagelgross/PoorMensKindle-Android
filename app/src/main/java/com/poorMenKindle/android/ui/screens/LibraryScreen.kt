@@ -41,7 +41,9 @@ import androidx.lifecycle.Lifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
-import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
+import com.poorMenKindle.android.ui.theme.Blue400
+import com.poorMenKindle.android.ui.theme.Blue500
+import com.poorMenKindle.android.ui.theme.appBackgroundBrush
 
 @Composable
 fun LibraryScreen(
@@ -104,13 +106,7 @@ fun LibraryScreen(
     }
 
     // Cooler and more welcoming gradient background
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFFEFF6FF), // Soft blue
-            Color(0xFFF3F4F6), // Very light gray/blue
-            Color(0xFFFFFFFF)  // White
-        )
-    )
+    val backgroundBrush = appBackgroundBrush()
 
     // Fetch data logic
     val refreshData: () -> Unit = {
@@ -189,7 +185,7 @@ fun LibraryScreen(
         ) {
             Text(
                 text = "Poor Men's Kindle \uD83D\uDE0C",
-                color = Color(0xFF1E3A8A), // Deep blue
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.SansSerif,
@@ -202,42 +198,42 @@ fun LibraryScreen(
                 IconButton(onClick = refreshData) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh Button"
+                        contentDescription = "Refresh Button",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
-                        Text("⋮", color = Color(0xFF4B5563), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        Text("⋮", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                        modifier = Modifier.background(Color.White)
+                        onDismissRequest = { menuExpanded = false }
                     ) {
                         if (NetworkManager.isAdmin) {
                             DropdownMenuItem(
-                                text = { Text("Admin Panel", color = Color(0xFF1F2937)) },
+                                text = { Text("Admin Panel") },
                                 onClick = { menuExpanded = false; onNavigateToAdmin() }
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Request Book", color = Color(0xFF1F2937)) },
+                            text = { Text("Request Book") },
                             onClick = { menuExpanded = false; onNavigateToRequestNew() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Offline EPUB", color = Color(0xFF1F2937)) },
+                            text = { Text("Offline EPUB") },
                             onClick = { menuExpanded = false; filePickerLauncher.launch(arrayOf("application/epub+zip")) }
                         )
                         DropdownMenuItem(
-                            text = { Text("Log Out", color = Color(0xFFEF4444)) },
+                            text = { Text("Log Out", color = MaterialTheme.colorScheme.error) },
                             onClick = {
                                 menuExpanded = false
                                 onLogout()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Licenses & About", color = Color(0xFF1F2937)) },
+                            text = { Text("Licenses & About") },
                             onClick = {
                                 menuExpanded = false
                                 onNavigateToLicenses()
@@ -268,7 +264,7 @@ fun LibraryScreen(
                         .fillMaxWidth()
                         .background(
                             Brush.horizontalGradient(
-                                colors = listOf(Color(0xFF3B82F6), Color(0xFF60A5FA))
+                                colors = listOf(Blue500, Blue400)
                             )
                         )
                 ) {
@@ -316,7 +312,7 @@ fun LibraryScreen(
                                 },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color.White,
-                                    contentColor = Color(0xFF2563EB)
+                                    contentColor = Blue500
                                 ),
                                 shape = RoundedCornerShape(14.dp),
                                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
@@ -333,7 +329,7 @@ fun LibraryScreen(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search by title or author...", color = Color(0xFF9CA3AF)) },
+            placeholder = { Text("Search by title or author...", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             leadingIcon = { Text("🔍", fontSize = 16.sp) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -341,12 +337,12 @@ fun LibraryScreen(
                 .padding(bottom = 12.dp)
                 .shadow(2.dp, RoundedCornerShape(20.dp)),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                focusedBorderColor = Color(0xFF3B82F6),
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = Color.Transparent,
-                focusedTextColor = Color(0xFF1F2937),
-                unfocusedTextColor = Color(0xFF1F2937)
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
             ),
             shape = RoundedCornerShape(20.dp),
             singleLine = true
@@ -362,8 +358,8 @@ fun LibraryScreen(
                 onClick = { showOnlyDownloaded = false },
                 label = { Text("☁️ All Books") },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFF3B82F6).copy(alpha = 0.2f),
-                    selectedLabelColor = Color(0xFF1E3A8A)
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
             FilterChip(
@@ -371,8 +367,8 @@ fun LibraryScreen(
                 onClick = { showOnlyDownloaded = true },
                 label = { Text("📱 Downloaded") },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFF3B82F6).copy(alpha = 0.2f),
-                    selectedLabelColor = Color(0xFF1E3A8A)
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         }
@@ -381,7 +377,7 @@ fun LibraryScreen(
         if (statusMessage.isNotEmpty() && !showOnlyDownloaded) {
             Text(
                 text = statusMessage,
-                color = Color(0xFF6B7280),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 16.dp)
             )
         }
@@ -389,7 +385,7 @@ fun LibraryScreen(
         if (showOnlyDownloaded && downloadedBooks.isEmpty() && statusMessage.isEmpty()) {
              Text(
                 text = "No downloaded books yet.",
-                color = Color(0xFF6B7280),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 16.dp)
             )
         }
@@ -441,8 +437,8 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
             modifier = Modifier
                 .aspectRatio(0.66f)
                 .fillMaxWidth()
-                .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = Color(0xFF3B82F6).copy(alpha = 0.1f))
-                .background(Color(0xFFE5E7EB), RoundedCornerShape(12.dp)),
+                .shadow(8.dp, RoundedCornerShape(12.dp), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
             // Coil handles image loading
@@ -465,7 +461,7 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
             text = book.title,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF1F2937),
+            color = MaterialTheme.colorScheme.onBackground,
             maxLines = 2,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             lineHeight = 18.sp
@@ -481,7 +477,7 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
             Text(
                 text = "${book.series_name.trim()} $numStr",
                 fontSize = 12.sp,
-                color = Color(0xFF6B7280),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -491,7 +487,7 @@ fun BookCard(book: BookInfo, onClick: () -> Unit) {
         Text(
             text = book.author,
             fontSize = 12.sp,
-            color = Color(0xFF9CA3AF),
+            color = MaterialTheme.colorScheme.outline,
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )

@@ -31,6 +31,7 @@ import com.poorMenKindle.android.network.BookInfo
 import com.poorMenKindle.android.network.NetworkManager
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.poorMenKindle.android.ui.theme.appBackgroundBrush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 
@@ -52,18 +53,11 @@ fun BookDetailScreen(
     var isDownloadedLocally by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var isDownloading by remember { mutableStateOf(false) }
+    var downloadError by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFFBFF5AC),
-            Color(0xFFB7F397),
-            Color(0xFF95D473),
-            Color(0xFF76D055),
-            Color(0xFF1C1B1B)
-        )
-    )
+    val backgroundBrush = appBackgroundBrush()
 
     LaunchedEffect(bookId) {
         coroutineScope.launch {
@@ -126,7 +120,7 @@ fun BookDetailScreen(
                 title = { Text("") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -137,12 +131,12 @@ fun BookDetailScreen(
     ) { paddingValues ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color(0xFF032579))
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else if (isError) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = errorMessage, color = Color.Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = errorMessage, color = MaterialTheme.colorScheme.error, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = {
                         coroutineScope.launch {
@@ -178,7 +172,7 @@ fun BookDetailScreen(
                                     .height(160.dp) // Reduced from 220.dp
                                     .width(110.dp)  // Reduced from 150.dp
                                     .shadow(12.dp, RoundedCornerShape(8.dp))
-                                    .background(Color.DarkGray, RoundedCornerShape(8.dp)),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 val imageSource: Any = if (isDownloadedLocally && localCoverBase64 != null) {
@@ -208,7 +202,7 @@ fun BookDetailScreen(
                                 text = b.title,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.Black,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 lineHeight = 28.sp
                                 )
 
@@ -221,7 +215,7 @@ fun BookDetailScreen(
                                     Text(
                                         text = "${b.series_name} $numStr".trim(),
                                         fontSize = 14.sp,
-                                        color = Color(0xFFe67e22),
+                                        color = MaterialTheme.colorScheme.secondary,
                                         fontStyle = FontStyle.Italic,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(bottom = 4.dp)
@@ -233,7 +227,7 @@ fun BookDetailScreen(
                                 Text(
                                     text = "by ${b.author}",
                                     fontSize = 16.sp,
-                                    color = Color(0xFF032579),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontStyle = FontStyle.Italic
                                 )
 
@@ -243,7 +237,7 @@ fun BookDetailScreen(
                                     text = if (isHebrew) "פרקים: ${b.total_chapters}" else "Total Chapters: ${b.total_chapters}",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF032579)
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -256,7 +250,7 @@ fun BookDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(55.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4dd0e1)),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -264,7 +258,7 @@ fun BookDetailScreen(
                                     text = if (currentChapter > 0) "Continue Reading (Ch. ${currentChapter + 1})" else "Start Reading",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
@@ -273,18 +267,18 @@ fun BookDetailScreen(
 
                         if (isDownloading) {
                             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Downloading... ${(downloadProgress * 100).toInt()}%", color = Color(0xFF032579), fontWeight = FontWeight.Bold)
+                                Text("Downloading... ${(downloadProgress * 100).toInt()}%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 LinearProgressIndicator(
                                     progress = { downloadProgress },
                                     modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                    color = Color(0xFF4dd0e1),
-                                    trackColor = Color.White.copy(alpha = 0.5f)
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             }
                         } else if (isDownloadedLocally) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("✅ Saved for Offline Reading", color = Color(0xFF2ecc71), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("✅ Saved for Offline Reading", color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))
@@ -296,14 +290,15 @@ fun BookDetailScreen(
                                         isDownloadedLocally = false
                                     }
                                 },
-                                modifier = Modifier.background(Color(0xFFe74c3c).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                modifier = Modifier.background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete Download", tint = Color(0xFFe74c3c))
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Download", tint = MaterialTheme.colorScheme.error)
                             }
                         } else {
                             OutlinedButton(
                                 onClick = {
                                     isDownloading = true
+                                    downloadError = ""
                                     coroutineScope.launch {
                                         val success = com.poorMenKindle.android.data.local.OfflineSyncManager.downloadBookFull(
                                             context = context,
@@ -315,14 +310,27 @@ fun BookDetailScreen(
                                             downloadProgress = current.toFloat() / total.toFloat()
                                         }
                                         isDownloading = false
-                                        if (success) isDownloadedLocally = true
+                                        if (success) {
+                                            isDownloadedLocally = true
+                                        } else {
+                                            downloadError = "Download failed — check your connection and try again."
+                                        }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF032579)),
-                                border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF032579))
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                                border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                             ) {
                                 Text("⬇ Download for Offline", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+                            if (downloadError.isNotEmpty()) {
+                                Text(
+                                    text = downloadError,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
                             }
                         }
 
@@ -334,8 +342,8 @@ fun BookDetailScreen(
                                 .fillMaxWidth()
                                 .weight(1f) // Takes up the remaining screen space
                                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                                 .padding(20.dp)
                         ) {
                             Column(
@@ -345,13 +353,13 @@ fun BookDetailScreen(
                                     text = if (isHebrew) "תקציר" else "Synopsis",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.Black,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     modifier = Modifier.padding(bottom = 8.dp)
                                 )
                                 Text(
                                     text = b.summary ?: if (isHebrew) "אין תקציר זמין לספר זה." else "No summary available for this book.",
                                     fontSize = 15.sp,
-                                    color = Color.DarkGray,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     lineHeight = 22.sp,
                                     // Text alignment based on language
                                     textAlign = if (isHebrew) TextAlign.Start else TextAlign.Justify

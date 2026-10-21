@@ -12,9 +12,8 @@ import com.poorMenKindle.android.ui.screens.ReadScreen
 import com.poorMenKindle.android.ui.screens.RequestNewScreen
 import com.poorMenKindle.android.ui.screens.LibraryScreen
 import com.poorMenKindle.android.ui.screens.AdminScreen
-import android.content.Context
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.edit
+import com.poorMenKindle.android.data.SessionManager
 import com.poorMenKindle.android.network.NetworkManager
 import com.poorMenKindle.android.ui.screens.BookDetailScreen
 import android.util.Base64
@@ -27,10 +26,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,12 +80,8 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
             // Switch back to the Main UI thread to clear data
             withContext(Dispatchers.Main) {
                 try {
-                    // Clear local storage
-                    context.getSharedPreferences("BookWormHolePrefs", Context.MODE_PRIVATE).edit {
-                        clear()
-                    }
-                    NetworkManager.jwtToken = null
-                    NetworkManager.isAdmin = false
+                    // Clear stored session
+                    SessionManager.clear(context)
                     NetworkManager.disconnect()
 
                     // Navigate back to the login screen
@@ -171,20 +166,20 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                                     text = "Poor Men's Kindle",
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF1E3A8A)
+                                    color = MaterialTheme.colorScheme.primary
                                 )
 
                                 Text(
                                     text = "Developed by Yagel Gross",
                                     fontSize = 16.sp,
-                                    color = Color.DarkGray,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
 
                                 Text(
                                     text = "Copyright © 2026",
                                     fontSize = 14.sp,
-                                    color = Color.Gray,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
 
@@ -192,13 +187,12 @@ fun BookWormHoleApp(startDestination: String = Screen.Login.route) {
                                     text = "Licensed under the MIT License",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color.Gray,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 12.dp)
                                 )
 
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(top = 24.dp),
-                                    color = Color.LightGray
+                                    modifier = Modifier.padding(top = 24.dp)
                                 )
                             }
                         }

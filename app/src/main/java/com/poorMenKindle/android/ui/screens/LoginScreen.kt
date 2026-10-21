@@ -18,7 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.poorMenKindle.android.data.SessionManager
 import com.poorMenKindle.android.network.NetworkManager
+import com.poorMenKindle.android.ui.theme.BrandGold
+import com.poorMenKindle.android.ui.theme.loginBackgroundBrush
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,14 +39,7 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
 
     val coroutineScope = rememberCoroutineScope()
 
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF99e2ff),
-            Color(0xFF8ee1f3),
-            Color(0xFF5bccee),
-            Color(0xFF5b97f5)
-        )
-    )
+    val backgroundBrush = loginBackgroundBrush()
 
     Box(
         modifier = Modifier
@@ -80,7 +76,7 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                     text = "✦ Poor Men's Kindle ✦",
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFc9a84c),
+                    color = BrandGold,
                     fontFamily = FontFamily.Serif,
                     modifier = Modifier.graphicsLayer {
                         scaleX = scale
@@ -101,7 +97,7 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                 val textFieldColors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.White.copy(alpha = 0.65f),
                     unfocusedContainerColor = Color.White.copy(alpha = 0.45f),
-                    focusedIndicatorColor = Color(0xFFc9a84c),
+                    focusedIndicatorColor = BrandGold,
                     unfocusedIndicatorColor = Color(0x6696A0B4),
                     focusedTextColor = Color(0xFF0e0e1e),
                     unfocusedTextColor = Color(0xFF1a1a2e)
@@ -131,7 +127,7 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                 if (errorMessage.isNotEmpty()) {
                     Text(
                         text = errorMessage,
-                        color = Color(0xFFff6b6b),
+                        color = MaterialTheme.colorScheme.error,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Serif,
                         fontStyle = FontStyle.Italic
@@ -163,12 +159,8 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                                         NetworkManager.jwtToken = loginBody.access_token
                                         NetworkManager.isAdmin = loginBody.is_admin
 
-                                        // Save to SharedPreferences
-                                        val sharedPrefs = context.getSharedPreferences("BookWormHolePrefs", android.content.Context.MODE_PRIVATE)
-                                        sharedPrefs.edit()
-                                            .putString("jwt_token", loginBody.access_token)
-                                            .putBoolean("is_admin", loginBody.is_admin)
-                                            .apply()
+                                        // Persist session in encrypted storage
+                                        SessionManager.saveSession(context, loginBody.access_token, loginBody.is_admin)
 
                                         onNavigateToRequest()
                                     } else {
@@ -185,7 +177,7 @@ fun LoginScreen(onNavigateToRequest: () -> Unit) {
                         }
                     },
                     modifier = Modifier.padding(top = 10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFc9a84c)),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandGold),
                     shape = RoundedCornerShape(20.dp),
                     enabled = !loginInProgress
                 ) {
